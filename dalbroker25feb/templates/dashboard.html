@@ -1,0 +1,1179 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<head>
+  <title>Superadmin Dashboard</title>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root {
+      --primary-color: #0f172a;
+      --secondary-color: #1e293b;
+      --accent-color: #3b82f6;
+      --accent-secondary: #10b981;
+      --accent-warning: #f59e0b;
+      --accent-danger: #ef4444;
+      --accent-purple: #8b5cf6;
+      --accent-cyan: #06b6d4;
+
+      --text-primary: #0f172a;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+
+      --bg-light: #f8fafc;
+      --bg-card: #ffffff;
+      --border-color: #e2e8f0;
+
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
+
+    /* ========== KPI CARDS ========== */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border-radius: 16px;
+      padding: 1.5rem;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--border-color);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.25s ease;
+      min-height: 130px;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .stat-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent-color), var(--accent-secondary));
+    }
+
+    .stat-card.warning::before {
+      background: linear-gradient(90deg, var(--accent-warning), #fbbf24);
+    }
+
+    .stat-card.danger::before {
+      background: linear-gradient(90deg, var(--accent-danger), #f87171);
+    }
+
+    .stat-card.success::before {
+      background: linear-gradient(90deg, var(--accent-secondary), #34d399);
+    }
+
+    .stat-card.purple::before {
+      background: linear-gradient(90deg, var(--accent-purple), #a78bfa);
+    }
+
+    .stat-card.cyan::before {
+      background: linear-gradient(90deg, var(--accent-cyan), #22d3ee);
+    }
+
+    .stat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.75rem;
+    }
+
+    .stat-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(59, 130, 246, 0.06));
+      color: var(--accent-color);
+    }
+
+    .stat-card.success .stat-icon {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.06));
+      color: var(--accent-secondary);
+    }
+
+    .stat-card.warning .stat-icon {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.06));
+      color: var(--accent-warning);
+    }
+
+    .stat-card.danger .stat-icon {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(239, 68, 68, 0.06));
+      color: var(--accent-danger);
+    }
+
+    .stat-card.purple .stat-icon {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(139, 92, 246, 0.06));
+      color: var(--accent-purple);
+    }
+
+    .stat-card.cyan .stat-icon {
+      background: linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(6, 182, 212, 0.06));
+      color: var(--accent-cyan);
+    }
+
+    .stat-title {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.35rem;
+    }
+
+    .stat-value {
+      font-size: 1.85rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin-bottom: 0.35rem;
+      font-family: "Outfit", sans-serif;
+    }
+
+    .stat-sub {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .stat-change {
+      font-size: 0.82rem;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-top: 0.35rem;
+      color: var(--text-secondary);
+    }
+
+    .stat-change.positive {
+      color: var(--accent-secondary);
+    }
+
+    .stat-change.negative {
+      color: var(--accent-danger);
+    }
+
+    /* ========== CARDS ========== */
+    .chart-card,
+    .table-card,
+    .activity-card {
+      background: var(--bg-card);
+      border-radius: 16px;
+      padding: 1.5rem;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--border-color);
+      margin-bottom: 1.25rem;
+    }
+
+    .chart-header,
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.85rem;
+      border-bottom: 1px solid var(--border-color);
+      flex-wrap: wrap;
+    }
+
+    .chart-title,
+    .table-title {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin: 0;
+    }
+
+    .chart-filter {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 0.5rem 0.9rem;
+      border: 1px solid var(--border-color);
+      background: transparent;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+
+    .filter-btn:hover,
+    .filter-btn.active {
+      background: var(--accent-color);
+      color: white;
+      border-color: var(--accent-color);
+    }
+
+    /* ========== TABLE ========== */
+    .table-actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary-custom {
+      background: linear-gradient(135deg, var(--accent-color), #2563eb);
+      border: none;
+      color: white;
+      padding: 0.6rem 1.1rem;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      transition: all 0.25s ease;
+    }
+
+    .btn-primary-custom:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(59, 130, 246, 0.25);
+    }
+
+    .custom-table {
+      width: 100%;
+      font-size: 0.875rem;
+    }
+
+    .custom-table thead {
+      background: var(--bg-light);
+    }
+
+    .custom-table th {
+      padding: 0.95rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      letter-spacing: 0.5px;
+      border: none;
+      white-space: nowrap;
+    }
+
+    .custom-table td {
+      padding: 0.95rem;
+      vertical-align: middle;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .custom-table tbody tr {
+      transition: background 0.2s ease;
+    }
+
+    .custom-table tbody tr:hover {
+      background: var(--bg-light);
+    }
+
+    .status-badge {
+      padding: 0.35rem 0.7rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      white-space: nowrap;
+    }
+
+    .status-badge::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+    }
+
+    .status-badge.completed {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--accent-secondary);
+    }
+
+    .status-badge.completed::before {
+      background: var(--accent-secondary);
+    }
+
+    .status-badge.pending {
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--accent-warning);
+    }
+
+    .status-badge.pending::before {
+      background: var(--accent-warning);
+    }
+
+    .status-badge.cancelled {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--accent-danger);
+    }
+
+    .status-badge.cancelled::before {
+      background: var(--accent-danger);
+    }
+
+    .status-badge.in-progress {
+      background: rgba(59, 130, 246, 0.1);
+      color: var(--accent-color);
+    }
+
+    .status-badge.in-progress::before {
+      background: var(--accent-color);
+    }
+
+    .status-badge.purple {
+      background: rgba(139, 92, 246, 0.1);
+      color: var(--accent-purple);
+    }
+
+    .status-badge.purple::before {
+      background: var(--accent-purple);
+    }
+
+    /* ========== ACTIVITY ========== */
+    .activity-item {
+      display: flex;
+      gap: 0.9rem;
+      padding: 0.9rem 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .activity-item:last-child {
+      border-bottom: none;
+    }
+
+    .activity-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 1rem;
+    }
+
+    .activity-icon.trade {
+      background: rgba(59, 130, 246, 0.12);
+      color: var(--accent-color);
+    }
+
+    .activity-icon.payment {
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--accent-secondary);
+    }
+
+    .activity-icon.complaint {
+      background: rgba(239, 68, 68, 0.12);
+      color: var(--accent-danger);
+    }
+
+    .activity-icon.delivery {
+      background: rgba(245, 158, 11, 0.12);
+      color: var(--accent-warning);
+    }
+
+    .activity-icon.contract {
+      background: rgba(139, 92, 246, 0.12);
+      color: var(--accent-purple);
+    }
+
+    .activity-content h6 {
+      font-size: 0.9rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin-bottom: 0.2rem;
+    }
+
+    .activity-content p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .activity-time {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-left: auto;
+      white-space: nowrap;
+      align-self: flex-start;
+    }
+
+    /* ========== BRANCH ========== */
+    .branch-card {
+      background: var(--bg-card);
+      border-radius: 14px;
+      padding: 1.15rem;
+      border: 1px solid var(--border-color);
+      margin-bottom: 0.9rem;
+      transition: all 0.25s ease;
+    }
+
+    .branch-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateX(4px);
+    }
+
+    .branch-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.9rem;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .branch-name {
+      font-weight: 900;
+      color: var(--text-primary);
+      font-size: 1rem;
+    }
+
+    .branch-sub {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-top: 0.15rem;
+    }
+
+    .branch-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.8rem;
+    }
+
+    .branch-stat {
+      text-align: center;
+      background: var(--bg-light);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 0.75rem 0.5rem;
+    }
+
+    .branch-stat-value {
+      font-size: 1.05rem;
+      font-weight: 900;
+      color: var(--text-primary);
+      font-family: "Outfit", sans-serif;
+      line-height: 1.2;
+    }
+
+    .branch-stat-label {
+      font-size: 0.68rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.45px;
+      font-weight: 800;
+      margin-top: 0.2rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 992px) {
+      .branch-stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      .branch-stats {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 10px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-light);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 5px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+  </style>
+</head>
+
+<div class="dashboard-content">
+
+  <!-- KPI CARDS (Expanded for Superadmin Broker) -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-header">
+        <div class="stat-icon"><i class="fas fa-handshake"></i></div>
+      </div>
+      <div class="stat-title">Active Contracts</div>
+      <div class="stat-value" id="kpiActiveContracts">—</div>
+      <div class="stat-change positive"><i class="fas fa-arrow-up"></i><span id="kpiActiveContractsDelta">—</span></div>
+    </div>
+
+    <div class="stat-card success">
+      <div class="stat-header">
+        <div class="stat-icon"><i class="fas fa-rupee-sign"></i></div>
+      </div>
+      <div class="stat-title">Gross Trade Value (MTD)</div>
+      <div class="stat-value" id="kpiGTV">—</div>
+      <div class="stat-change positive"><i class="fas fa-arrow-up"></i><span id="kpiGTVDeta">—</span></div>
+    </div>
+
+    <div class="stat-card cyan">
+      <div class="stat-header">
+        <div class="stat-icon"><i class="fas fa-percent"></i></div>
+      </div>
+      <div class="stat-title">Brokerage Earned (MTD)</div>
+      <div class="stat-value" id="kpiBrokerage">—</div>
+      <p class="stat-sub">Avg brokerage: <strong id="kpiBrokerageRate">—</strong></p>
+    </div>
+
+    <div class="stat-card warning">
+      <div class="stat-header">
+        <div class="stat-icon"><i class="fas fa-truck"></i></div>
+      </div>
+      <div class="stat-title">Pending Dispatches</div>
+      <div class="stat-value" id="kpiPendingDispatches">—</div>
+      <div class="stat-change negative"><i class="fas fa-arrow-down"></i><span id="kpiDispatchDelta">—</span></div>
+    </div>
+
+    <div class="stat-card purple">
+      <div class="stat-header">
+        <div class="stat-icon"><i class="fas fa-warehouse"></i></div>
+      </div>
+      <div class="stat-title">Active Sellers</div>
+      <div class="stat-value" id="kpiActiveSellers">—</div>
+      <p class="stat-sub">Commodities listed: <strong id="kpiListedSKUs">—</strong></p>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-header">
+        <div class="stat-icon"><i class="fas fa-building"></i></div>
+      </div>
+      <div class="stat-title">Active Buyers</div>
+      <div class="stat-value" id="kpiActiveBuyers">—</div>
+      <p class="stat-sub">Finalized deals (MTD): <strong id="kpiFinalDeals">—</strong></p>
+    </div>
+
+    <div class="stat-card danger">
+      <div class="stat-header">
+        <div class="stat-icon"><i class="fas fa-exclamation-circle"></i></div>
+      </div>
+      <div class="stat-title">Open Complaints</div>
+      <div class="stat-value" id="kpiComplaints">—</div>
+      <p class="stat-sub">Escalations: <strong id="kpiEscalations">—</strong></p>
+    </div>
+
+    <div class="stat-card success">
+      <div class="stat-header">
+        <div class="stat-icon"><i class="fas fa-shipping-fast"></i></div>
+      </div>
+      <div class="stat-title">On-time Delivery %</div>
+      <div class="stat-value" id="kpiOTD">—</div>
+      <p class="stat-sub">Avg transit: <strong id="kpiAvgTransit">—</strong></p>
+    </div>
+
+    <div class="stat-card warning">
+      <div class="stat-header">
+        <div class="stat-icon"><i class="fas fa-file-invoice"></i></div>
+      </div>
+      <div class="stat-title">Payments Overdue</div>
+      <div class="stat-value" id="kpiOverdue">—</div>
+      <p class="stat-sub">₹ at risk: <strong id="kpiAtRisk">—</strong></p>
+    </div>
+
+    <div class="stat-card cyan">
+      <div class="stat-header">
+        <div class="stat-icon"><i class="fas fa-route"></i></div>
+      </div>
+      <div class="stat-title">Active Transporters</div>
+      <div class="stat-value" id="kpiTransporters">—</div>
+      <p class="stat-sub">Capacity utilized: <strong id="kpiCapacity">—</strong></p>
+    </div>
+
+    <div class="stat-card purple">
+      <div class="stat-header">
+        <div class="stat-icon"><i class="fas fa-sitemap"></i></div>
+      </div>
+      <div class="stat-title">Branches</div>
+      <div class="stat-value" id="kpiBranches">—</div>
+      <p class="stat-sub">Admins active: <strong id="kpiAdmins">—</strong></p>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-header">
+        <div class="stat-icon"><i class="fas fa-scale-balanced"></i></div>
+      </div>
+      <div class="stat-title">Deals in Negotiation</div>
+      <div class="stat-value" id="kpiNegotiation">—</div>
+      <p class="stat-sub">Avg time-to-close: <strong id="kpiTTC">—</strong></p>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW 1 -->
+  <div class="row mb-4">
+    <div class="col-lg-8">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Gross Trade Value & Deals</h3>
+          <div class="chart-filter" id="gtvFilters">
+            <button class="filter-btn active" data-range="7D">7D</button>
+            <button class="filter-btn" data-range="1M">1M</button>
+            <button class="filter-btn" data-range="3M">3M</button>
+            <button class="filter-btn" data-range="1Y">1Y</button>
+          </div>
+        </div>
+        <canvas id="gtvDealsChart" height="80"></canvas>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Pipeline by Stage</h3>
+        </div>
+        <canvas id="pipelineChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW 2 -->
+  <div class="row mb-4">
+    <div class="col-lg-4">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Commodity Mix (Volume)</h3>
+        </div>
+        <canvas id="commodityMixChart" height="200"></canvas>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Top Buyers (GTV)</h3>
+        </div>
+        <canvas id="topBuyersChart" height="200"></canvas>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Transporter SLA</h3>
+        </div>
+        <canvas id="transporterSlaChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- BRANCH PERFORMANCE & ACTIVITY -->
+  <div class="row mb-4">
+    <div class="col-lg-6">
+      <div class="activity-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Branch Performance</h3>
+        </div>
+
+        <div id="branchPerformanceContainer">
+          <!-- Branch performance cards will be populated dynamically -->
+        </div>
+
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="activity-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Recent Activities</h3>
+        </div>
+
+        <div id="recentActivitiesList">
+          <!-- Activities will be populated dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAYMENTS & RISK -->
+  <div class="row mb-4">
+    <div class="col-lg-8">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">Payments & Receivables</h3>
+        </div>
+        <canvas id="paymentsChart" height="80"></canvas>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="chart-title">User Distribution</h3>
+        </div>
+        <canvas id="userChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECENT CONTRACTS TABLE -->
+  <div class="table-card">
+    <div class="table-header">
+      <h3 class="table-title">Recent Contracts</h3>
+      <div class="table-actions">
+        <button class="btn-primary-custom"><i class="fas fa-download me-2"></i>Export</button>
+        <button class="btn-primary-custom"><i class="fas fa-plus me-2"></i>New Contract</button>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="custom-table">
+        <thead>
+          <tr>
+            <th>Contract ID</th>
+            <th>Seller</th>
+            <th>Buyer</th>
+            <th>Commodity</th>
+            <th>Qty</th>
+            <th>Rate</th>
+            <th>Value</th>
+            <th>Brokerage</th>
+            <th>Payment</th>
+            <th>Delivery</th>
+            <th>Transporter</th>
+            <th>Branch</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="recentContractsTableBody">
+          <!-- Contract rows will be populated dynamically -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Parse dashboard data from Django context
+  const dashboardData = {{ dashboard_data_json|default:"{}"|safe }};
+  const kpis = dashboardData.kpis || {};
+  const charts = dashboardData.charts || {};
+  const branchPerformance = dashboardData.branchPerformance || [];
+  const recentActivities = dashboardData.recentActivities || [];
+  const recentContracts = dashboardData.recentContracts || [];
+
+  // ========== KPI MOUNT ==========
+  function mountKPIs() {
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+    set("kpiActiveContracts", kpis.activeContracts || 0);
+    set("kpiGTV", kpis.gtv || '₹0');
+    set("kpiBrokerage", kpis.brokerageEarned || '₹0');
+    set("kpiBrokerageRate", `${kpis.brokerageRate || 0}%`);
+    set("kpiPendingDispatches", kpis.pendingDispatches || 0);
+    set("kpiActiveSellers", kpis.activeSellers || 0);
+    set("kpiListedSKUs", kpis.listedSkus || 0);
+    set("kpiActiveBuyers", kpis.activeBuyers || 0);
+    set("kpiFinalDeals", kpis.finalDeals || 0);
+    set("kpiComplaints", kpis.openComplaints || 0);
+    set("kpiEscalations", kpis.escalations || 0);
+    set("kpiOTD", `${kpis.onTimeDelivery || 0}%`);
+    set("kpiAvgTransit", `${kpis.avgTransit || 0} days`);
+    set("kpiOverdue", kpis.paymentsOverdue || 0);
+    set("kpiAtRisk", `₹${(kpis.atRisk / 100000).toFixed(1)}L` || '₹0L');
+    set("kpiTransporters", kpis.activeTransporters || 0);
+    set("kpiCapacity", `${kpis.capacityUtilized || 0}%`);
+    set("kpiBranches", kpis.branches || 0);
+    set("kpiAdmins", kpis.admins || 0);
+    set("kpiNegotiation", kpis.negotiation || 0);
+    set("kpiTTC", `${kpis.avgTTC || 0} days`);
+  }
+
+  // ========== CHART HELPERS ==========
+  function makeChart(ctx, config) {
+    return new Chart(ctx, config);
+  }
+
+  // Global chart instances for updates
+  let gtvDealsChart;
+
+  // ========== CHARTS ==========
+  function initCharts() {
+    // 1) GTV & Deals (line + bar)
+    const gtvData = charts.gtvDeals || {};
+    const gtvCtx = document.getElementById("gtvDealsChart").getContext("2d");
+    gtvDealsChart = makeChart(gtvCtx, {
+      type: "bar",
+      data: {
+        labels: gtvData.labels || [],
+        datasets: [
+          {
+            type: "line",
+            label: "GTV (₹ Lakhs)",
+            data: (gtvData.gtvValues || []).map(v => v / 100000),
+            borderColor: "#3b82f6",
+            backgroundColor: "rgba(59, 130, 246, 0.12)",
+            tension: 0.35,
+            fill: true,
+            borderWidth: 3,
+            yAxisID: "y"
+          },
+          {
+            label: "Deals Closed",
+            data: gtvData.dealsValues || [],
+            backgroundColor: "rgba(16, 185, 129, 0.7)",
+            borderRadius: 10,
+            borderSkipped: false,
+            yAxisID: "y1"
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            display: true,
+            position: "top",
+            labels: {
+              usePointStyle: true,
+              padding: 18,
+              font: { family: "Plus Jakarta Sans", size: 12, weight: "700" }
+            }
+          },
+          tooltip: { backgroundColor: "#0f172a", padding: 12 }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: { color: "#e2e8f0", drawBorder: false },
+            ticks: { font: { family: "Plus Jakarta Sans", size: 12 } },
+            title: { display: true, text: "₹ Lakhs" }
+          },
+          y1: {
+            beginAtZero: true,
+            position: "right",
+            grid: { display: false },
+            ticks: { font: { family: "Plus Jakarta Sans", size: 12 } },
+            title: { display: true, text: "Deals" }
+          },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+
+    // 2) Pipeline by Stage (doughnut)
+    const pipelineData = charts.pipeline || {};
+    const pipelineCtx = document.getElementById("pipelineChart").getContext("2d");
+    makeChart(pipelineCtx, {
+      type: "doughnut",
+      data: {
+        labels: pipelineData.labels || [],
+        datasets: [{
+          data: pipelineData.values || [],
+          backgroundColor: ["#3b82f6", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#64748b"],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { position: "bottom", labels: { usePointStyle: true, padding: 16, font: { size: 12, weight: "700" } } },
+          tooltip: { backgroundColor: "#0f172a", padding: 12 }
+        }
+      }
+    });
+
+    // 3) Commodity Mix (polar area)
+    const commodityData = charts.commodityMix || {};
+    const commodityCtx = document.getElementById("commodityMixChart").getContext("2d");
+    makeChart(commodityCtx, {
+      type: "polarArea",
+      data: {
+        labels: commodityData.labels || [],
+        datasets: [{
+          data: commodityData.volumes || [],
+          backgroundColor: [
+            "rgba(59, 130, 246, 0.75)",
+            "rgba(16, 185, 129, 0.75)",
+            "rgba(245, 158, 11, 0.75)",
+            "rgba(139, 92, 246, 0.75)",
+            "rgba(6, 182, 212, 0.75)",
+            "rgba(100, 116, 139, 0.65)"
+          ],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { position: "bottom", labels: { usePointStyle: true, padding: 14, font: { size: 12, weight: "700" } } },
+          tooltip: { backgroundColor: "#0f172a", padding: 12 }
+        }
+      }
+    });
+
+    // 4) Top Buyers (horizontal bar)
+    const topBuyersData = charts.topBuyers || {};
+    const topBuyersCtx = document.getElementById("topBuyersChart").getContext("2d");
+    makeChart(topBuyersCtx, {
+      type: "bar",
+      data: {
+        labels: topBuyersData.labels || [],
+        datasets: [{
+          label: "GTV (₹ Lakhs)",
+          data: (topBuyersData.gtvValues || []).map(v => v / 100000),
+          backgroundColor: "rgba(59, 130, 246, 0.75)",
+          borderRadius: 10,
+          borderSkipped: false
+        }]
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: { backgroundColor: "#0f172a", padding: 12 }
+        },
+        scales: {
+          x: { grid: { color: "#e2e8f0" }, beginAtZero: true },
+          y: { grid: { display: false } }
+        }
+      }
+    });
+
+    // 5) Transporter SLA (bar)
+    const slaData = charts.transporterSLA || {};
+    const slaCtx = document.getElementById("transporterSlaChart").getContext("2d");
+    makeChart(slaCtx, {
+      type: "bar",
+      data: {
+        labels: slaData.labels || [],
+        datasets: [{
+          label: "On-time %",
+          data: slaData.otdPercentages || [],
+          backgroundColor: "rgba(16, 185, 129, 0.75)",
+          borderRadius: 10,
+          borderSkipped: false
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: { backgroundColor: "#0f172a", padding: 12 }
+        },
+        scales: {
+          y: { beginAtZero: true, max: 100, grid: { color: "#e2e8f0" } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+
+    // 6) Payments & Receivables (stacked)
+    const paymentsData = charts.paymentsReceivables || {};
+    const payCtx = document.getElementById("paymentsChart").getContext("2d");
+    makeChart(payCtx, {
+      type: "bar",
+      data: {
+        labels: paymentsData.labels || [],
+        datasets: [
+          {
+            label: "Received (₹ Lakhs)",
+            data: (paymentsData.received || []).map(v => v / 100000),
+            backgroundColor: "rgba(16, 185, 129, 0.75)",
+            borderRadius: 10,
+            borderSkipped: false
+          },
+          {
+            label: "Outstanding (₹ Lakhs)",
+            data: (paymentsData.outstanding || []).map(v => v / 100000),
+            backgroundColor: "rgba(245, 158, 11, 0.75)",
+            borderRadius: 10,
+            borderSkipped: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            display: true,
+            position: "top",
+            labels: { usePointStyle: true, padding: 18, font: { size: 12, weight: "700" } }
+          },
+          tooltip: { backgroundColor: "#0f172a", padding: 12 }
+        },
+        scales: {
+          x: { stacked: true, grid: { display: false } },
+          y: { stacked: true, beginAtZero: true, grid: { color: "#e2e8f0" } }
+        }
+      }
+    });
+
+    // 7) User Distribution (doughnut)
+    const userData = charts.userDistribution || {};
+    const userCtx = document.getElementById("userChart").getContext("2d");
+    makeChart(userCtx, {
+      type: "doughnut",
+      data: {
+        labels: userData.labels || [],
+        datasets: [{
+          data: userData.counts || [],
+          backgroundColor: ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#0f172a"],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { position: "bottom", labels: { usePointStyle: true, padding: 16, font: { size: 12, weight: "700" } } },
+          tooltip: { backgroundColor: "#0f172a", padding: 12 }
+        }
+      }
+    });
+  }
+
+  // ========== POPULATE DYNAMIC CONTENT ==========
+  function populateRecentActivities() {
+    const container = document.getElementById('recentActivitiesList');
+    if (!container) return;
+
+    container.innerHTML = '';
+    recentActivities.forEach(activity => {
+      const item = document.createElement('div');
+      item.className = 'activity-item';
+      item.innerHTML = `
+        <div class="activity-icon ${activity.type}"><i class="fas fa-${activity.icon}"></i></div>
+        <div class="activity-content">
+          <h6>${activity.title}</h6>
+          <p>${activity.description}</p>
+        </div>
+        <div class="activity-time">${activity.time}</div>
+      `;
+      container.appendChild(item);
+    });
+  }
+
+  function populateRecentContracts() {
+    const tbody = document.getElementById('recentContractsTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    recentContracts.forEach(contract => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td><strong>${contract.id}</strong></td>
+        <td>${contract.seller}</td>
+        <td>${contract.buyer}</td>
+        <td>${contract.commodity}</td>
+        <td>${contract.quantity}</td>
+        <td>${contract.rate}</td>
+        <td>${contract.value}</td>
+        <td>${contract.brokerage}</td>
+        <td><span class="status-badge ${contract.payment_status === 'Fully Paid' ? 'completed' : 'pending'}">${contract.payment_status}</span></td>
+        <td><span class="status-badge ${contract.delivery_status === 'Delivered' ? 'completed' : 'in-progress'}">${contract.delivery_status}</span></td>
+        <td>${contract.transporter}</td>
+        <td>${contract.branch}</td>
+        <td>
+          <button class="btn btn-sm btn-link"><i class="fas fa-eye"></i></button>
+          <button class="btn btn-sm btn-link"><i class="fas fa-edit"></i></button>
+        </td>
+      `;
+      tbody.appendChild(row);
+    });
+  }
+
+  function populateBranchPerformance() {
+    const container = document.getElementById('branchPerformanceContainer');
+    if (!container) return;
+
+    container.innerHTML = '';
+    branchPerformance.forEach(branch => {
+      const card = document.createElement('div');
+      card.className = 'branch-card';
+      card.innerHTML = `
+        <div class="branch-header">
+          <div>
+            <div class="branch-name">${branch.name}</div>
+            <div class="branch-sub">Admin: ${branch.admin} • Sellers: ${branch.sellers} • Buyers: ${branch.buyers}</div>
+          </div>
+          <span class="status-badge ${branch.status === 'active' ? 'completed' : 'pending'}">${branch.status === 'active' ? 'Active' : 'Watchlist'}</span>
+        </div>
+        <div class="branch-stats">
+          <div class="branch-stat">
+            <div class="branch-stat-value">${branch.contracts}</div>
+            <div class="branch-stat-label">Contracts</div>
+          </div>
+          <div class="branch-stat">
+            <div class="branch-stat-value">₹${(branch.gtv_mtd / 100000).toFixed(1)}L</div>
+            <div class="branch-stat-label">GTV (MTD)</div>
+          </div>
+          <div class="branch-stat">
+            <div class="branch-stat-value">${branch.otd_percent}%</div>
+            <div class="branch-stat-label">OTD</div>
+          </div>
+          <div class="branch-stat">
+            <div class="branch-stat-value">${branch.open_issues}</div>
+            <div class="branch-stat-label">Open Issues</div>
+          </div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  // ========== FILTER UPDATE (GTV/Deals chart) ==========
+  function bindFilters() {
+    const container = document.getElementById("gtvFilters");
+    if (!container) return;
+
+    const buttons = container.querySelectorAll(".filter-btn");
+    buttons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        buttons.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+
+        // For now, keep static. TODO: implement dynamic range updates
+        // const range = btn.dataset.range;
+        // Update chart data based on range
+      });
+    });
+  }
+
+  // ========== BOOT ==========
+  document.addEventListener("DOMContentLoaded", () => {
+    mountKPIs();
+    initCharts();
+    populateRecentActivities();
+    populateRecentContracts();
+    populateBranchPerformance();
+    bindFilters();
+  });
+</script>
+
+{% endblock %}

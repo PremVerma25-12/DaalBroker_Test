@@ -1,0 +1,35 @@
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+      <div>
+        <h6 class="mb-1">KYC Status</h6>
+        <small class="text-muted">Account status: {{ user.account_status|title }}</small>
+      </div>
+      <div>
+        {% if user.kyc_status == 'approved' %}
+          <span class="badge bg-success">Approved</span>
+        {% elif user.kyc_status == 'rejected' %}
+          <span class="badge bg-danger">Rejected</span>
+        {% else %}
+          <span class="badge bg-warning text-dark">Pending</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if user.kyc_status == 'approved' and user.kyc_approved_at %}
+      <div class="mt-2 small text-success">Approved at {{ user.kyc_approved_at|date:"d M Y h:i A" }}</div>
+    {% endif %}
+
+    {% if user.kyc_status == 'rejected' %}
+      <div class="mt-2 small text-danger">
+        {% if user.kyc_rejected_at %}Rejected at {{ user.kyc_rejected_at|date:"d M Y h:i A" }}{% endif %}
+        {% if user.kyc_rejection_reason %}<div>Reason: {{ user.kyc_rejection_reason }}</div>{% endif %}
+      </div>
+    {% endif %}
+
+    {% if action_block_message %}
+      <div class="alert alert-warning mt-3 mb-0 py-2">{{ action_block_message }}</div>
+    {% endif %}
+  </div>
+</div>
+

@@ -1,0 +1,501 @@
+<style>
+
+    /* --- Sidebar Styles --- */
+    .sidebar {
+      width: 260px;
+      padding: 30px 20px;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      /*overflow-y: auto;*/
+      background-color: var(--bg-sidebar); /* Added background for visibility */
+      transition: width 0.3s ease, padding 0.3s ease;
+      height: 100vh;
+      border-right: 1px solid #e1e1e1;
+    }
+
+    /* Collapsed State Styles */
+    .sidebar.collapsed {
+      width: 80px;
+      padding: 30px 10px;
+      overflow-x: visible; /* Allows tooltips to spill out */
+    }
+
+    /* Hide text elements in collapsed state */
+    .sidebar.collapsed .logo-text,
+    .sidebar.collapsed .link-text,
+    .sidebar.collapsed .menu-arrow,
+    .sidebar.collapsed .user-info,
+    .sidebar.collapsed .menu-category-header {
+      display: none !important;
+    }
+
+    /* Adjust logo center in collapsed */
+    .sidebar.collapsed .brand-logo {
+      justify-content: center !important;
+      margin-bottom: 30px !important;
+    }
+    .sidebar.collapsed .toggle-btn {
+        position: absolute;
+        top: 35px;
+        right: -12px;
+        background: white;
+        border-radius: 50%;
+        padding: 5px;
+        border: 1px solid #ccc;
+        font-size: 12px;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 100;
+    }
+
+    /* Center icons in collapsed state */
+    .sidebar.collapsed .nav-link {
+      justify-content: center;
+      padding: 12px 0;
+    }
+    .sidebar.collapsed .nav-link i {
+      margin-right: 0 !important;
+      font-size: 18px;
+    }
+
+    /* --- Menu Styling --- */
+    .nav-link {
+      color: var(--text-primary);
+      font-weight: 500;
+      font-size: 14px;
+      padding: 12px 15px;
+      border-radius: 12px;
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      transition: all 0.3s ease;
+      position: relative; /* For tooltip positioning */
+    }
+
+    .nav-link i {
+      width: 25px; /* Fixed width for alignment */
+      color: var(--text-secondary);
+      transition: color 0.3s ease;
+    }
+
+    .nav-link:hover {
+      background-color: rgba(255, 255, 255, 0.5);
+    }
+
+    .nav-link.active {
+      background-color: var(--active-item);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+      color: var(--text-primary);
+    }
+
+    .nav-link.active i {
+      color: var(--text-primary);
+    }
+
+    /* --- Dropdown Styles --- */
+    .menu-dropdown-btn {
+      width: 100%;
+      transition: transform 0.5s ease;
+      text-align: left;
+      background: none;
+      border: none;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+    
+    .menu-arrow {
+      font-size: 12px;
+      transition: transform 0.3s ease;
+      margin-left: auto;
+    }
+
+    /* Rotate arrow when expanded */
+    .menu-dropdown-btn[aria-expanded="true"] .menu-arrow {
+      transform: rotate(90deg);
+      margin-top: 15px;
+      transition: transform 0.5s ease;
+    }
+
+    .sidebar-submenu {
+      padding-left: 15px;
+      /* overflow: hidden; */ /* Removing overflow hidden helps with animations usually, but Bootstrap collapse handles it */
+    }
+
+    .sidebar-submenu .nav-link {
+      font-size: 13px;
+      padding: 10px 15px;
+    }
+    
+    /* Small dot for submenu icons */
+    .sidebar-submenu .nav-link i {
+      font-size: 10px; 
+      width: 20px;
+    }
+
+    /* --- Tooltip / Dialog Box for Collapsed State --- */
+    /* Hidden by default */
+    .hover-dialog {
+      position: absolute;
+      left: 100%;
+      top: 50%;
+      transform: translateY(-50%);
+      background-color: #333;
+      color: #fff;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      white-space: nowrap;
+      opacity: 0;
+      visibility: hidden;
+      margin-left: 10px;
+      z-index: 1000;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    
+    .hover-dialog::before {
+      content: "";
+      position: absolute;
+      left: -4px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-width: 5px 5px 5px 0;
+      border-style: solid;
+      border-color: transparent #333 transparent transparent;
+    }
+
+    /* Show tooltip only when sidebar is collapsed and item is hovered */
+    .sidebar.collapsed .nav-link:hover .hover-dialog,
+    .sidebar.collapsed .menu-dropdown-btn:hover .hover-dialog {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* Hide submenus completely in collapsed state to avoid mess */
+    .sidebar.collapsed .collapse.show {
+      display: none;
+    }
+    /* Make parent link look active in collapsed state if it was expanded */
+    .sidebar.collapsed .menu-dropdown-btn {
+        justify-content: center;
+    }
+
+    /* --- User Profile --- */
+    .user-profile {
+      margin-top: auto;
+      display: flex;
+      align-items: center;
+      padding-top: 20px;
+      transition: all 0.3s;
+      border-top: 1px solid rgba(0,0,0,0.05);
+    }
+
+    .user-avatar img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    
+    /* Center avatar in collapsed */
+    .sidebar.collapsed .user-profile {
+        justify-content: center;
+    }
+    .sidebar.collapsed .user-avatar {
+        margin-right: 0 !important;
+    }
+    .logo-img{
+      width: 80px;
+    }
+  </style>
+
+
+<nav class="sidebar" id="sidebar">
+  <!-- Logo -->
+  <div class="brand-logo mb-4 d-flex align-items-center justify-content-between position-relative">
+    <div class="d-flex align-items-center gap-2">
+      <div
+        class="bg-dark text-white rounded-circle d-flex align-items-center justify-content-center"
+        style="width: 32px; height: 32px"
+      >
+        <i class="fa-solid fa-chart-simple" style="font-size: 14px; color: white"></i>
+      </div>
+      <span class="logo-text fw-bold ms-1" style="font-size:18px;">Agro Broker</span>
+      <!-- <img class="logo-img" src="/static/images/logo.png"> -->
+    </div>
+    
+    <!-- Toggle sidebar button -->
+    <i class="fa-solid fa-bars-staggered text-secondary toggle-btn" id="sidebarToggle"></i>
+  </div>
+
+
+
+    <!-- Wrap the menu items in a div with an ID for the Accordion logic -->
+  <div id="sidebar-accordion">
+    <div class="nav-item">
+      <a href="/dashboard/" class="nav-link">
+        <i class="fa-solid fa-house"></i> 
+        <span class="link-text">Dashboard</span>
+        <span class="hover-dialog">Dashboard</span>
+      </a>
+    </div>
+
+    <!-- Masters DROPDOWN -->
+    <div class="nav-item mt-2">
+      <a class="nav-link menu-dropdown-btn collapsed" data-bs-toggle="collapse" 
+      href="#mastersMenu" data-bs-target="#mastersMenu" 
+      role="button" aria-expanded="false" aria-controls="mastersMenu">
+        <div class="d-flex align-items-center">
+          <i class="fa-solid fa-layer-group"></i> 
+          <span class="link-text ms-2">Masters</span>
+        </div>
+        <i class="fa-solid fa-chevron-right menu-arrow"></i>
+        <span class="hover-dialog">Masters</span>
+      </a>
+
+      <!-- Added data-bs-parent="#sidebar-accordion" here -->
+      <div class="collapse" id="mastersMenu" data-bs-parent="#sidebar-accordion">
+        <ul class="nav flex-column sidebar-submenu">
+        {% if user.is_superuser %}
+        <li class="nav-item">
+          <a href="{% url 'user_list' %}" class="nav-link">
+            <i class="fa-regular fa-calendar"></i> <span class="link-text">User Management</span>
+          </a>
+        </li>
+        {% endif %}
+        {% if user.is_superuser or user.role == 'admin' %}
+        <li class="nav-item">
+          <a href="{% url 'kyc_dashboard_page' %}" class="nav-link">
+            <i class="fa-solid fa-id-card"></i> <span class="link-text">User KYCs</span>
+          </a>
+        </li>
+        {% endif %}
+        <li class="nav-item">
+          <a href="{% url 'category_list' %}" class="nav-link">
+            <i class="fa-solid fa-map-location-dot"></i> <span class="link-text">Category Master</span>
+          </a>
+        </li>
+        <!-- <li class="nav-item">
+          <a href="{% url 'subcategory_list' %}" class="nav-link">
+            <i class="fa-solid fa-circle-nodes"></i> <span class="link-text">Sub-Category Master</span>
+          </a>
+        </li> -->
+        <li class="nav-item">
+          <a href="{% url 'brand_list' %}" class="nav-link">
+            <i class="fa-solid fa-tags"></i> <span class="link-text">Brand Master</span>
+          </a>
+        </li>
+        {% if user.is_superuser or user.role == 'admin' %}
+      <li class="nav-item">
+        <a href="{% url 'tag_master' %}" class="nav-link">
+          <i class="fa-solid fa-tags"></i>
+          <span class="link-text">Tag Master</span>
+        </a>
+      </li>
+      {% endif %}
+        </ul>
+      </div>
+    </div>
+    
+    <div class="nav-item mt-2">
+  <a class="nav-link menu-dropdown-btn collapsed" data-bs-toggle="collapse" 
+     href="#product" data-bs-target="#product" 
+     role="button" aria-expanded="false" aria-controls="product">
+    <div class="d-flex align-items-center">
+      <i class="fa-solid fa-boxes-stacked"></i> 
+      <span class="link-text ms-2">Product</span>
+    </div>
+    <i class="fa-solid fa-chevron-right menu-arrow"></i>
+    <span class="hover-dialog">Product</span>
+  </a>
+
+  <div class="collapse" id="product" data-bs-parent="#sidebar-accordion">
+    <ul class="nav flex-column sidebar-submenu">
+
+      <!-- Product Master -->
+      <li class="nav-item">
+        <a href="{% url 'product_list' %}" class="nav-link">
+          <i class="fa-solid fa-box"></i>
+          <span class="link-text">Offer's</span>
+        </a>
+      </li>
+
+      <!-- Product Images -->
+      {% if user.is_superuser or user.role == 'admin' or user.is_staff or user.role == 'seller' or user.is_seller %}
+      <li class="nav-item">
+        <a href="{% url 'product_image_list' %}" class="nav-link">
+          <i class="fa-solid fa-images"></i>
+          <span class="link-text">Product Images</span>
+        </a>
+      </li>
+      {% endif %}
+
+      <!-- Product Video -->
+      {% if user.is_superuser or user.role == 'admin' or user.is_staff or user.role == 'seller' or user.is_seller %}
+      <li class="nav-item">
+        <a href="{% url 'product_video_list' %}" class="nav-link">
+          <i class="fa-solid fa-video"></i>
+          <span class="link-text">Product Video</span>
+        </a>
+      </li>
+      {% endif %}
+
+      <!-- Intrast -->
+      {% if user.is_superuser or user.role == 'admin' or user.role == 'seller' or user.role == 'buyer' or user.is_seller or user.is_buyer %}
+      <li class="nav-item">
+        <a href="{% url 'intrast_page' %}" class="nav-link">
+          <i class="fa-solid fa-handshake"></i>
+          <span class="link-text">Contracts</span>
+        </a>
+      </li>
+      {% endif %}
+
+      <!-- Contracts -->
+      <!-- {% if user.is_superuser or user.role == 'admin' or user.role == 'seller' or user.role == 'buyer' or user.is_seller or user.is_buyer %}
+      <li class="nav-item">
+        <a href="#" class="nav-link">
+          <i class="fa-solid fa-file-contract"></i>
+          <span class="link-text"></span>
+        </a>
+      </li>
+      {% endif %} -->
+
+      <!-- Tag Master -->
+    </ul>
+  </div>
+</div>
+    <!-- Manage College DROPDOWN -->
+    <div class="nav-item mt-2">
+      <a class="nav-link menu-dropdown-btn collapsed" data-bs-toggle="collapse" 
+        href="#collegeMenu" data-bs-target="#collegeMenu" 
+        role="button" aria-expanded="false" aria-controls="collegeMenu">
+        <div class="d-flex align-items-center">
+          <i class="fa-solid fa-school"></i> 
+          <span class="link-text ms-2">Branches</span>
+        </div>
+        <i class="fa-solid fa-chevron-right menu-arrow"></i>
+        <span class="hover-dialog">Branches</span>
+      </a>
+
+      <div class="collapse" id="collegeMenu" data-bs-parent="#sidebar-accordion">
+        <ul class="nav flex-column sidebar-submenu">
+        <li class="nav-item">
+          <a href="{% url 'branch_master' %}" class="nav-link">
+            <i class="fa-regular fa-calendar"></i> <span class="link-text">Branch Master</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link">
+            <i class="fa-solid fa-map-location-dot"></i> <span class="link-text">Dummy</span>
+          </a>
+        </li>
+        </ul>
+      </div>
+ 
+    </div>
+
+    <div class="nav-item mt-2">
+      <a class="nav-link menu-dropdown-btn collapsed" data-bs-toggle="collapse" 
+        href="#contract" data-bs-target="#contract" 
+        role="button" aria-expanded="false" aria-controls="contract">
+        <div class="d-flex align-items-center">
+          <i class="fa-solid fa-school"></i> 
+          <span class="link-text ms-2">Deals</span>
+        </div>
+        <i class="fa-solid fa-chevron-right menu-arrow"></i>
+        <span class="hover-dialog">Contracts & Deals</span>
+      </a>
+    </div>
+
+  </div> 
+
+  <!-- Settings Menu -->
+  <div class="mt-4">
+    <small class="menu-category-header text-muted ps-3 mb-2 d-block" style="font-size:12px; font-weight:500;">SETTINGS</small>
+    <ul class="nav flex-column">
+      {% if user.is_superuser or user.role == 'admin' %}
+        <li class="nav-item">
+            <a href="{% url 'role_permissions' %}" class="nav-link">
+                <i class="fa-solid fa-key"></i> 
+                <span class="link-text">Permissions</span>
+                <span class="hover-dialog">Permissions</span>
+            </a>
+        </li>
+        {% endif %}
+        <li class="nav-item">
+            <a href="/logout/" class="nav-link">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i> 
+                <span class="link-text">Logout</span>
+                <span class="hover-dialog">Logout</span>
+            </a>
+        </li>
+    </ul>
+  </div>
+
+
+</nav>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const sidebar = document.getElementById("sidebar");
+    const toggleBtn = document.getElementById("sidebarToggle");
+
+    // 1. Sidebar Toggle Logic
+    toggleBtn.addEventListener("click", function () {
+      sidebar.classList.toggle("collapsed");
+      
+      if(sidebar.classList.contains("collapsed")){
+        toggleBtn.classList.remove("fa-bars-staggered"); // Adjusted icon class based on your code
+        toggleBtn.classList.add("fa-bars"); 
+        
+        // Close all open dropdowns properly using getOrCreateInstance
+        document.querySelectorAll('.collapse.show').forEach(el => {
+           const bsCollapse = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
+           bsCollapse.hide();
+        });
+      } else {
+        toggleBtn.classList.remove("fa-bars");
+        toggleBtn.classList.add("fa-bars-staggered");
+      }
+    });
+
+    // 2. Active Menu Highlighter & Auto-Expand Logic
+    const currentPath = window.location.pathname;
+    const navLinks = document.querySelectorAll('.sidebar .nav-link');
+
+    navLinks.forEach(link => {
+      const linkHref = link.getAttribute('href');
+
+      // Check if current path matches the link
+      if (linkHref && (linkHref === currentPath || (linkHref !== '/' && currentPath.startsWith(linkHref)))) {
+        
+        // Add active class to the specific child link
+        link.classList.add('active');
+
+        // Check if this link is inside a dropdown submenu
+        const parentCollapse = link.closest('.collapse');
+        
+        if (parentCollapse) {
+          // FIX: Use getOrCreateInstance with toggle:false to avoid breaking click listeners
+          const bsCollapse = bootstrap.Collapse.getOrCreateInstance(parentCollapse, { toggle: false });
+          bsCollapse.show();
+          
+          // Highlight the parent dropdown button
+          // We search for the button that targets this collapse ID
+          const parentBtn = document.querySelector(`[data-bs-target="#${parentCollapse.id}"]`) || document.querySelector(`[href="#${parentCollapse.id}"]`);
+          
+          if (parentBtn) {
+            parentBtn.classList.add('active'); // Optional: style the parent "Masters" text
+            parentBtn.classList.remove('collapsed');
+            parentBtn.setAttribute('aria-expanded', 'true');
+          }
+        }
+      }
+    });
+  });
+</script>

@@ -1,0 +1,209 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if user %}Edit User{% else %}Create User{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3>{% if user %}Edit User: {{ user.username }}{% else %}Create New User{% endif %}</h3>
+            </div>
+            <div class="card-body">
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+                
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">Username *</label>
+                                <input type="text" class="form-control" id="username" name="username" 
+                                       value="{% if user %}{{ user.username }}{% endif %}" 
+                                       {% if user %}readonly{% endif %} required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email *</label>
+                                <input type="email" class="form-control" id="email" name="email" 
+                                       value="{% if user %}{{ user.email }}{% endif %}" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="mobile" class="form-label">Mobile *</label>
+                                <input type="text" class="form-control" id="mobile" name="mobile" 
+                                       value="{% if user %}{{ user.mobile }}{% endif %}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="role" class="form-label">Role *</label>
+                                <select class="form-control" id="role" name="role" required>
+                                    {% for role_key, role_label in roles %}
+                                        <option value="{{ role_key }}" 
+                                                {% if user and user.role == role_key %}selected{% endif %}
+                                                {% if not user and role_key == 'buyer' %}selected{% endif %}>
+                                            {{ role_label }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="first_name" class="form-label">First Name</label>
+                                <input type="text" class="form-control" id="first_name" name="first_name" 
+                                       value="{% if user %}{{ user.first_name|default:'' }}{% endif %}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="last_name" class="form-label">Last Name</label>
+                                <input type="text" class="form-control" id="last_name" name="last_name" 
+                                       value="{% if user %}{{ user.last_name|default:'' }}{% endif %}">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if not user %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Password *</label>
+                                <input type="password" class="form-control" id="password" name="password" required>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="pan_number" class="form-label">PAN Number</label>
+                                <input type="text" class="form-control" id="pan_number" name="pan_number" 
+                                       value="{% if user %}{{ user.pan_number|default:'' }}{% endif %}"
+                                       placeholder="e.g., ABCDE1234F">
+                                <div class="form-text">10-character PAN number</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="gst_number" class="form-label">GST Number</label>
+                                <input type="text" class="form-control" id="gst_number" name="gst_number" 
+                                       value="{% if user %}{{ user.gst_number|default:'' }}{% endif %}"
+                                       placeholder="e.g., 22AAAAA0000A1Z5">
+                                <div class="form-text">15-character GST number</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="tags" class="form-label">Tags * (Select 1-15 tags)</label>
+                        <select multiple class="form-control" id="tags" name="tag_ids" required style="min-height: 120px;">
+                            {% for tag in available_tags %}
+                                <option value="{{ tag.id }}" 
+                                        {% if user and tag in user.tags.all %}selected{% endif %}>
+                                    {{ tag.tag_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Select at least 1 and maximum 15 tags for this user.</div>
+                    </div>
+                    
+                    <!-- Document Uploads -->
+                    <div class="mb-4">
+                        <h5 class="mb-3">Document Uploads</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="pan_image" class="form-label">PAN Card Image *</label>
+                                    <input type="file" class="form-control" id="pan_image" name="pan_image" 
+                                           accept=".jpg,.jpeg,.png,.pdf" required>
+                                    <div class="form-text">Upload PAN card image (JPG, PNG, PDF - Max 2MB)</div>
+                                    {% if user.pan_image %}
+                                        <div class="mt-2">
+                                            <small class="text-muted">Current: <a href="{{ user.pan_image.url }}" target="_blank">View PAN</a></small>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="gst_image" class="form-label">GST Certificate Image</label>
+                                    <input type="file" class="form-control" id="gst_image" name="gst_image" 
+                                           accept=".jpg,.jpeg,.png,.pdf">
+                                    <div class="form-text">Upload GST certificate (JPG, PNG, PDF - Max 2MB)</div>
+                                    {% if user.gst_image %}
+                                        <div class="mt-2">
+                                            <small class="text-muted">Current: <a href="{{ user.gst_image.url }}" target="_blank">View GST</a></small>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="shopact_image" class="form-label">Shop Act Document</label>
+                                    <input type="file" class="form-control" id="shopact_image" name="shopact_image" 
+                                           accept=".jpg,.jpeg,.png,.pdf">
+                                    <div class="form-text">Upload Shop Act document (JPG, PNG, PDF - Max 2MB)</div>
+                                    {% if user.shopact_image %}
+                                        <div class="mt-2">
+                                            <small class="text-muted">Current: <a href="{{ user.shopact_image.url }}" target="_blank">View Shop Act</a></small>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="adharcard_image" class="form-label">Aadhaar Card Document</label>
+                                    <input type="file" class="form-control" id="adharcard_image" name="adharcard_image" 
+                                           accept=".jpg,.jpeg,.png,.pdf">
+                                    <div class="form-text">Upload Aadhaar card (JPG, PNG, PDF - Max 2MB)</div>
+                                    {% if user.adharcard_image %}
+                                        <div class="mt-2">
+                                            <small class="text-muted">Current: <a href="{{ user.adharcard_image.url }}" target="_blank">View Aadhaar</a></small>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if user %}
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="is_active" name="is_active" 
+                               {% if user.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="is_active">Active User</label>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'user_list' %}" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            {% if user %}Update User{% else %}Create User{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

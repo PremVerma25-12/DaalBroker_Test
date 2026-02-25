@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}Tag Master{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <nav class="breadcrumb-custom" aria-label="breadcrumb">
+    <a href="/dashboard/">Dashboard</a>
+    <i class="separator fa fa-chevron-right"></i>
+    <a href="#">Master</a>
+    <i class="separator fa fa-chevron-right"></i>
+    <span class="active">Tag Master</span>
+  </nav>
+
+  <div class="d-flex justify-content-between align-items-center">
+    <h1 class="page-title">Tag Master</h1>
+    <button class="btn btn-dal" id="openCreateTagModal"><i class="fas fa-plus"></i> Add Tag</button>
+  </div>
+</div>
+
+<div id="tagAlertBox"></div>
+
+<div class="card p-3 mb-3">
+  <div class="row g-2 align-items-center">
+    <div class="col-md-10">
+      <input type="text" class="form-control" id="tagSearchInput" placeholder="Search tags...">
+    </div>
+    <div class="col-md-2">
+      <button class="btn btn-primary w-100" id="tagSearchBtn">Apply</button>
+    </div>
+  </div>
+</div>
+
+<div class="table-responsive card">
+  <table class="table table-custom mb-0">
+    <thead>
+      <tr>
+        <th>Tag ID</th>
+        <th>Tag Name</th>
+        <th>Created At</th>
+        <th class="text-center">Action</th>
+      </tr>
+    </thead>
+    <tbody id="tagTableBody">
+      <tr><td colspan="4" class="text-center text-muted">Loading tags...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mt-3">
+  <button class="btn btn-outline-secondary btn-sm" id="tagPrevBtn">Previous</button>
+  <span id="tagPageInfo" class="small text-muted">Page 1</span>
+  <button class="btn btn-outline-secondary btn-sm" id="tagNextBtn">Next</button>
+</div>
+
+<div class="modal fade" id="createTagModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5>Add Tag</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">Tag Name *</label>
+        <input type="text" id="createTagName" class="form-control" maxlength="50" placeholder="Enter tag name">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" id="saveCreateTagBtn">Create</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="editTagModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5>Edit Tag</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editTagId">
+        <label class="form-label">Tag Name *</label>
+        <input type="text" id="editTagName" class="form-control" maxlength="50" placeholder="Enter tag name">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" id="saveEditTagBtn">Update</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+const createTagModal = window.bootstrap ? bootstrap.Modal.getOrCreateInstance(document.getElementById('createTagModal')) : null;
+const editTagModal = window.bootstrap ? bootstrap.Modal.getOrCreateInstance(document.getElementById('editTagModal')) : null;
+let tagCurrentPage = 1;
+let tagTotalPages = 1;
+let tagSearch = '';
+
+function showTagAlert(type, msg) {
+  document.getElementById('tagAlertBox').innerHTML = `<div class="alert alert-${type} alert-dismissible fade show">${msg}<button class="btn-close" data-bs-dismiss="alert"></button></div>`;
+}
+
+function tagRow(tag) {
+  return `
+    <tr id="tag-row-${tag.id}">
+      <td>${tag.id}</td>
+      <td>${tag.tag_name}</td>
+      <td>${tag.created_at}</td>
+      <td class="text-center">
+        <div class="d-flex gap-2 justify-content-center align-items-center flex-nowrap">
+          <button class="btn-action btn-view view-tag" data-id="${tag.id}" data-name="${tag.tag_name}" title="View"><i class="fa-regular fa-eye"></i></button>
+          <button class="btn-action btn-edit edit-tag" data-id="${tag.id}" data-name="${tag.tag_name}" title="Edit"><i class="fa-solid fa-pencil"></i></button>
+          <button class="btn-action btn-delete delete-tag" data-id="${tag.id}" data-name="${tag.tag_name}" title="Delete"><i class="fa-regular fa-trash-can"></i></button>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+async function loadTags(page = 1) {
+  const query = new URLSearchParams({ page: String(page) });
+  if (tagSearch) query.set('search', tagSearch);
+  const res = await authFetch(`/api/admin/tag/list/?${query.toString()}`, { method: 'GET' });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    showTagAlert('danger', data.message || 'Unable to load tags.');
+    return;
+  }
+
+  tagCurrentPage = data.pagination.page || 1;
+  tagTotalPages = data.pagination.num_pages || 1;
+  document.getElementById('tagPageInfo').textContent = `Page ${tagCurrentPage} of ${tagTotalPages}`;
+  document.getElementById('tagPrevBtn').disabled = !data.pagination.has_previous;
+  document.getElementById('tagNextBtn').disabled = !data.pagination.has_next;
+
+  const body = document.getElementById('tagTableBody');
+  if (!data.results.length) {
+    body.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No tags found</td></tr>';
+    return;
+  }
+  body.innerHTML = data.results.map(tagRow).join('');
+}
+
+document.getElementById('openCreateTagModal').addEventListener('click', () => createTagModal?.show());
+document.getElementById('tagSearchBtn').addEventListener('click', () => {
+  tagSearch = document.getElementById('tagSearchInput').value.trim();
+  loadTags(1);
+});
+document.getElementById('tagPrevBtn').addEventListener('click', () => {
+  if (tagCurrentPage > 1) loadTags(tagCurrentPage - 1);
+});
+document.getElementById('tagNextBtn').addEventListener('click', () => {
+  if (tagCurrentPage < tagTotalPages) loadTags(tagCurrentPage + 1);
+});
+
+document.getElementById('saveCreateTagBtn').addEventListener('click', async () => {
+  const tagName = document.getElementById('createTagName').value.trim();
+  const res = await authFetch('/api/admin/tag/create/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify({ tag_name: tagName }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    showTagAlert('danger', data.message || 'Unable to create tag.');
+    return;
+  }
+  createTagModal?.hide();
+  document.getElementById('createTagName').value = '';
+  showTagAlert('success', data.message);
+  loadTags(1);
+});
+
+document.getElementById('saveEditTagBtn').addEventListener('click', async () => {
+  const id = document.getElementById('editTagId').value;
+  const tagName = document.getElementById('editTagName').value.trim();
+  const res = await authFetch(`/api/admin/tag/${id}/update/`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+    body: JSON.stringify({ tag_name: tagName }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    showTagAlert('danger', data.message || 'Unable to update tag.');
+    return;
+  }
+  editTagModal?.hide();
+  showTagAlert('success', data.message);
+  loadTags(tagCurrentPage);
+});
+
+document.addEventListener('click', async (e) => {
+  const editBtn = e.target.closest('.edit-tag');
+  if (editBtn) {
+    document.getElementById('editTagId').value = editBtn.dataset.id;
+    document.getElementById('editTagName').value = editBtn.dataset.name;
+    editTagModal?.show();
+    return;
+  }
+
+  const viewBtn = e.target.closest('.view-tag');
+  if (viewBtn) {
+    showTagAlert('info', `Tag: ${viewBtn.dataset.name}`);
+    return;
+  }
+
+  const deleteBtn = e.target.closest('.delete-tag');
+  if (!deleteBtn) return;
+
+  const id = deleteBtn.dataset.id;
+  const name = deleteBtn.dataset.name;
+  if (!confirm(`Delete tag "${name}"?`)) return;
+
+  let res = await authFetch(`/api/admin/tag/${id}/delete/`, {
+    method: 'DELETE',
+    headers: { 'X-CSRFToken': csrfToken },
+  });
+  let data = await res.json();
+  if (res.status === 409 && data.requires_confirmation) {
+    if (!confirm(`${data.message}\n\nThis will remove tag mapping from users. Continue?`)) return;
+    res = await authFetch(`/api/admin/tag/${id}/delete/?force=1`, {
+      method: 'DELETE',
+      headers: { 'X-CSRFToken': csrfToken },
+    });
+    data = await res.json();
+  }
+  if (!res.ok || !data.success) {
+    showTagAlert('danger', data.message || 'Unable to delete tag.');
+    return;
+  }
+  showTagAlert('success', data.message);
+  loadTags(tagCurrentPage);
+});
+
+loadTags(1);
+</script>
+{% endblock %}

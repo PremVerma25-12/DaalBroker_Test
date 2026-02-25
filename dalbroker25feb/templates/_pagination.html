@@ -1,0 +1,52 @@
+{% if page_obj and page_obj.paginator.count > 10 %}
+<style>
+    .pagination.pagination-smart .page-item {
+        margin: 0 4px;
+    }
+    .pagination.pagination-smart .page-link {
+        width: auto !important;
+        min-width: 36px;
+        height: 36px;
+        padding: 0 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        white-space: nowrap;
+    }
+    .pagination.pagination-smart .page-item.active .page-link {
+        border-color: #0d6efd;
+    }
+</style>
+<nav aria-label="Pagination Navigation" class="mt-3">
+    <ul class="pagination pagination-smart justify-content-center align-items-center mb-0 flex-wrap">
+        <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+            <a class="page-link" href="{% if page_obj.has_previous %}{% if pagination.querystring %}?{{ pagination.querystring }}&{{ pagination.page_param }}=1{% else %}?{{ pagination.page_param }}=1{% endif %}{% else %}#{% endif %}">&laquo;&laquo;</a>
+        </li>
+        <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+            <a class="page-link" href="{% if page_obj.has_previous %}{% if pagination.querystring %}?{{ pagination.querystring }}&{{ pagination.page_param }}={{ page_obj.previous_page_number }}{% else %}?{{ pagination.page_param }}={{ page_obj.previous_page_number }}{% endif %}{% else %}#{% endif %}">Previous</a>
+        </li>
+
+        {% for page_number in pagination.window %}
+            {% if page_number %}
+                <li class="page-item {% if page_number == page_obj.number %}active{% endif %}">
+                    <a class="page-link" href="{% if pagination.querystring %}?{{ pagination.querystring }}&{{ pagination.page_param }}={{ page_number }}{% else %}?{{ pagination.page_param }}={{ page_number }}{% endif %}">
+                        {{ page_number }}
+                    </a>
+                </li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+
+        <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{% if page_obj.has_next %}{% if pagination.querystring %}?{{ pagination.querystring }}&{{ pagination.page_param }}={{ page_obj.next_page_number }}{% else %}?{{ pagination.page_param }}={{ page_obj.next_page_number }}{% endif %}{% else %}#{% endif %}">
+                Next
+            </a>
+        </li>
+        <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{% if page_obj.has_next %}{% if pagination.querystring %}?{{ pagination.querystring }}&{{ pagination.page_param }}={{ page_obj.paginator.num_pages }}{% else %}?{{ pagination.page_param }}={{ page_obj.paginator.num_pages }}{% endif %}{% else %}#{% endif %}">&raquo;&raquo;</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}

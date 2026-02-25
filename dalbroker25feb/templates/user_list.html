@@ -1,0 +1,976 @@
+{% extends "base.html" %}
+{% block title %}User Management{% endblock %}
+
+{% block content %}
+
+
+<div class="page-header">
+  <!-- Breadcrumb -->
+  <nav class="breadcrumb-custom" aria-label="breadcrumb">
+      <a href="/dashboard/">Dashboard</a>
+      <i class="separator fa fa-chevron-right"></i>
+      <a href="#">Master</a>
+      <i class="separator fa fa-chevron-right"></i>
+      <span class="active">User Management</span>
+  </nav>
+  
+  <!-- Page Title -->
+  <div class="d-flex justify-content-between align-items-center">
+      <h1 class="page-title">User Management</h1>
+
+      <div class="d-flex gap-2">
+        <button id="addUserBtn" class="btn btn-dal" data-bs-toggle="modal" data-bs-target="#createUserModal">
+            <i class="fas fa-plus"></i> Add User
+        </button>
+      </div>
+  </div>
+</div>
+
+
+
+
+
+
+            <div id="alertBox"></div>
+
+            <form method="get" class="card p-3 mb-3">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-4">
+                        <input
+                            type="text"
+                            name="search"
+                            class="form-control"
+                            placeholder="Search records..."
+                            value="{{ filters.search|default:'' }}"
+                        >
+                    </div>
+                    <div class="col-md-3">
+                        <select name="role" class="form-select">
+                            <option value="all" {% if filters.role == 'all' %}selected{% endif %}>All Roles</option>
+                            {% for k,v in roles %}
+                            <option value="{{ k }}" {% if filters.role == k %}selected{% endif %}>{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select name="account_status" class="form-select">
+                            <option value="all" {% if filters.account_status == 'all' %}selected{% endif %}>All Status</option>
+                            <option value="active" {% if filters.account_status == 'active' %}selected{% endif %}>Active</option>
+                            <option value="deactive" {% if filters.account_status == 'deactive' %}selected{% endif %}>Deactive</option>
+                            <option value="suspended" {% if filters.account_status == 'suspended' %}selected{% endif %}>Suspended</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary w-100">Apply</button>
+                        <a href="{% url 'user_list' %}" class="btn btn-outline-secondary w-100">Reset</a>
+                    </div>
+                </div>
+            </form>
+
+            <div class="table-responsive card">
+                <table class="table table-custom">
+                    <thead >
+                        <tr>
+                            <th>Username</th>
+                            <th>Password</th>
+                            <th>Email</th>
+                            <th>Mobile</th>
+                            <th>Tags</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Date Joined</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="userTableBody">
+                        {% for user in users %}
+                        <tr id="user-row-{{ user.id }}">
+                            <td>{{ user.username }}</td>
+                            <td>{{ user.char_password }}</td>
+                            <td>{{ user.email }}</td>
+                            <td>{{ user.mobile }}</td>
+                            <td>
+                                {% with tags=user.tags.all %}
+                                  {% if tags %}
+                                    <span class="badge bg-secondary">{{ tags.0.tag_name }}</span>
+                                    {% if tags|length > 1 %}
+                                      <div class="dropdown d-inline-block ms-1">
+                                        <button
+                                          class="btn btn-sm btn-outline-secondary py-0 px-1"
+                                          type="button"
+                                          data-bs-toggle="dropdown"
+                                          aria-expanded="false"
+                                        >
+                                          +{{ tags|length|add:"-1" }}
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                          {% for tag in tags|slice:"1:" %}
+                                            <li><span class="dropdown-item-text">{{ tag.tag_name }}</span></li>
+                                          {% endfor %}
+                                        </ul>
+                                      </div>
+                                    {% endif %}
+                                  {% else %}
+                                    <span class="text-muted">-</span>
+                                  {% endif %}
+                                {% endwith %}
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ user.get_role_display }}</span>
+                            </td>
+                            <td>
+                                {% if user.account_status == 'active' %}
+                                    <span class="badge bg-success">Active</span>
+                                {% elif user.account_status == 'deactive' %}
+                                    <span class="badge bg-warning text-dark">Deactive</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Suspended</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ user.date_joined|date:"d M Y" }}</td>
+                            <td class="text-center">
+                                <div class="d-flex gap-2 justify-content-end">
+                                    <button class="btn-action btn-view view-user" title="View Details" data-id="{{ user.id }}">
+                                        <i class="fa-regular fa-eye"></i>
+                                    </button>
+                                    <button class="btn-action btn-edit edit-user" title="Edit" data-id="{{ user.id }}">
+                                        <i class="fa-solid fa-pencil"></i>
+                                    </button>
+                                    <button class="btn-action btn-delete delete-user" title="Delete" data-id="{{ user.id }}">
+                                        <i class="fa-regular fa-trash-can"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted">No users found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% include "_pagination.html" %}
+
+ 
+
+<!-- ===================== CREATE MODAL ===================== -->
+<div class="modal fade" id="createUserModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5>Create New User</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {% csrf_token %}
+                
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label>Username</label>
+                        <input type="text" class="form-control" value="Auto from Mobile Number" readonly>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        
+                        <label>Email *</label>
+                        <input type="email" class="form-control" id="create_email" required>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label>Mobile *</label>
+                        <input type="text" class="form-control" id="create_mobile" required>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label>Password *</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="create_password" required>
+                            <button class="btn btn-outline-secondary toggle-password" type="button" data-target="create_password">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label>First Name</label>
+                        <input type="text" class="form-control" id="create_first_name">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label>Last Name</label>
+                        <input type="text" class="form-control" id="create_last_name">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label>Role *</label>
+                        <select class="form-select" id="create_role" required>
+                            {% for k,v in roles %}
+                            <option value="{{ k }}">{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label>Account Status *</label>
+                        <select class="form-select" id="create_account_status">
+                            <option value="active">Active</option>
+                            <option value="deactive">Deactive</option>
+                            <option value="suspended">Suspended</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Suspension Reason</label>
+                        <input type="text" class="form-control" id="create_suspension_reason" placeholder="Required when suspended">
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>PAN Number</label>
+                        <input type="text" class="form-control" id="create_pan_number" placeholder="10 characters">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label>GST Number</label>
+                        <input type="text" class="form-control" id="create_gst_number" placeholder="15 characters">
+                    </div>
+                    <div class="col-md-6">
+                        <label>Tags * (Select 1 to 15)</label>
+                        <div class="dropdown">
+                            <button
+                                class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center"
+                                type="button"
+                                id="create_tags_btn"
+                                data-bs-toggle="dropdown"
+                                data-bs-auto-close="outside"
+                                aria-expanded="false"
+                            >
+                                <span>Select Tags</span>
+                                <i class="fa-solid fa-chevron-down small"></i>
+                            </button>
+                            <ul class="dropdown-menu w-100 p-2" id="create_tags_menu" style="max-height: 220px; overflow: auto;"></ul>
+                        </div>
+                        <small class="text-muted">Select minimum 1 and maximum 15 tags.</small>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>PAN Image</label>
+                        <input type="file" class="form-control" id="create_pan_image" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf">
+                        <small id="create_pan_image_name" class="text-muted">No file selected</small>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>GST Image</label>
+                        <input type="file" class="form-control" id="create_gst_image" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf">
+                        <small id="create_gst_image_name" class="text-muted">No file selected</small>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Shop Act Image</label>
+                        <input type="file" class="form-control" id="create_shopact_image" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf">
+                        <small id="create_shopact_image_name" class="text-muted">No file selected</small>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Aadhaar Card Image *</label>
+                        <input type="file" class="form-control" id="create_adharcard_image" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" required>
+                        <small id="create_adharcard_image_name" class="text-muted">No file selected</small>
+                    </div>
+
+                    
+                    <!-- <div class="col-md-6">
+                        <label>Plain Password (Security Risk)</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="create_char_password">
+                            <button class="btn btn-outline-secondary toggle-password" type="button" data-target="create_char_password">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div> -->
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary" id="saveCreateUser">Create User</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== VIEW MODAL ===================== -->
+<div class="modal fade" id="viewUserModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5>User Details</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="view_user_details">
+                    <div class="row">
+                        <div class="col-md-6"><strong>Username:</strong> <span id="view_username"></span></div>
+                        <div class="col-md-6"><strong>Email:</strong> <span id="view_email"></span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6"><strong>Mobile:</strong> <span id="view_mobile"></span></div>
+                        <div class="col-md-6"><strong>Role:</strong> <span id="view_role"></span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6"><strong>First Name:</strong> <span id="view_first_name"></span></div>
+                        <div class="col-md-6"><strong>Last Name:</strong> <span id="view_last_name"></span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6"><strong>PAN Number:</strong> <span id="view_pan_number"></span></div>
+                        <div class="col-md-6"><strong>GST Number:</strong> <span id="view_gst_number"></span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6"><strong>Plain Password:</strong> <span id="view_char_password"></span></div>
+                        <div class="col-md-6"><strong>Account Status:</strong> <span id="view_account_status"></span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6"><strong>Suspension Reason:</strong> <span id="view_suspension_reason"></span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-12"><strong>Tags:</strong> <span id="view_tags">N/A</span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6"><strong>Date Joined:</strong> <span id="view_date_joined"></span></div>
+                    </div>
+                    <hr>
+                    <div class="row mt-2">
+                        <div class="col-md-12"><strong>Uploaded Documents:</strong></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6"><strong>PAN Image:</strong> <span id="view_pan_image">N/A</span></div>
+                        <div class="col-md-6"><strong>GST Image:</strong> <span id="view_gst_image">N/A</span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6"><strong>Shop Act Image:</strong> <span id="view_shopact_image">N/A</span></div>
+                        <div class="col-md-6"><strong>Aadhaar Card Image:</strong> <span id="view_adharcard_image">N/A</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== EDIT MODAL ===================== -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5>Edit User</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {% csrf_token %}
+                <input type="hidden" id="edit_user_id">
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label>Username</label>
+                        <input type="text" class="form-control" id="edit_username" readonly>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label>Email</label>
+                        <input type="email" class="form-control" id="edit_email">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label>Mobile</label>
+                        <input type="text" class="form-control" id="edit_mobile">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label>Role</label>
+                        <select class="form-select" id="edit_role">
+                            {% for k,v in roles %}
+                            <option value="{{ k }}">{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label>First Name</label>
+                        <input type="text" class="form-control" id="edit_first_name">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label>Last Name</label>
+                        <input type="text" class="form-control" id="edit_last_name">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label>Account Status</label>
+                        <select class="form-select" id="edit_account_status">
+                            <option value="active">Active</option>
+                            <option value="deactive">Deactive</option>
+                            <option value="suspended">Suspended</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>Suspension Reason</label>
+                        <input type="text" class="form-control" id="edit_suspension_reason">
+                    </div>
+
+                    <div class="col-md-6">
+                        <label>PAN Number</label>
+                        <input type="text" class="form-control" id="edit_pan_number">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label>GST Number</label>
+                        <input type="text" class="form-control" id="edit_gst_number">
+                    </div>
+                    <div class="col-md-6">
+                        <label>Tags * (Select 1 to 15)</label>
+                        <div class="dropdown">
+                            <button
+                                class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center"
+                                type="button"
+                                id="edit_tags_btn"
+                                data-bs-toggle="dropdown"
+                                data-bs-auto-close="outside"
+                                aria-expanded="false"
+                            >
+                                <span>Select Tags</span>
+                                <i class="fa-solid fa-chevron-down small"></i>
+                            </button>
+                            <ul class="dropdown-menu w-100 p-2" id="edit_tags_menu" style="max-height: 220px; overflow: auto;"></ul>
+                        </div>
+                        <small class="text-muted">Select minimum 1 and maximum 15 tags.</small>
+                    </div>
+                    
+                    <input type="hidden" id="edit_char_password">
+                    
+                    <input type="hidden" id="edit_is_active" value="true">
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary" id="saveEditUser">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== DELETE MODAL ===================== -->
+<div class="modal fade" id="deleteUserModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5>Delete User</h5>
+                <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="deleteText"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-danger" id="confirmDelete">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const ALERT_TIMEOUT_MS = 10000;
+const createUserModalEl = document.getElementById('createUserModal');
+const viewUserModalEl = document.getElementById('viewUserModal');
+const editUserModalEl = document.getElementById('editUserModal');
+const deleteUserModalEl = document.getElementById('deleteUserModal');
+const ALLOWED_DOC_EXTENSIONS = ['jpg', 'jpeg', 'png', 'pdf'];
+const MAX_DOC_SIZE_BYTES = 2 * 1024 * 1024;
+
+const createUserModal = window.bootstrap ? bootstrap.Modal.getOrCreateInstance(createUserModalEl) : null;
+const viewUserModal = window.bootstrap ? bootstrap.Modal.getOrCreateInstance(viewUserModalEl) : null;
+const editModal = window.bootstrap ? bootstrap.Modal.getOrCreateInstance(editUserModalEl) : null;
+const deleteModal = window.bootstrap ? bootstrap.Modal.getOrCreateInstance(deleteUserModalEl) : null;
+let deleteUserId = null;
+
+// ===================== ALERT =====================
+function showAlert(type, msg){
+    document.getElementById("alertBox").innerHTML = `
+        <div class="alert alert-${type} alert-dismissible fade show">
+            ${msg}
+            <button class="btn-close" data-bs-dismiss="alert"></button>
+        </div>`;
+    const alertEl = document.querySelector("#alertBox .alert");
+    if (alertEl && window.bootstrap) {
+        setTimeout(() => {
+            if (!document.body.contains(alertEl)) return;
+            bootstrap.Alert.getOrCreateInstance(alertEl).close();
+        }, ALERT_TIMEOUT_MS);
+    }
+}
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, function (ch) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+    });
+}
+
+function roleLabel(role) {
+    const map = {
+        admin: 'Admin',
+        buyer: 'Buyer',
+        seller: 'Seller',
+        transporter: 'Transporter',
+        both_sellerandbuyer: 'Both Seller and Buyer'
+    };
+    return map[role] || role || '-';
+}
+
+function statusBadge(accountStatus) {
+    const status = (accountStatus || 'active').toLowerCase();
+    if (status === 'active') return '<span class="badge bg-success">Active</span>';
+    if (status === 'deactive') return '<span class="badge bg-warning text-dark">Deactive</span>';
+    return '<span class="badge bg-danger">Suspended</span>';
+}
+
+function setFileNamePreview(inputId, outputId) {
+    const inputEl = document.getElementById(inputId);
+    const outputEl = document.getElementById(outputId);
+    if (!inputEl || !outputEl) return;
+    const fileName = inputEl.files && inputEl.files[0] ? inputEl.files[0].name : 'No file selected';
+    outputEl.textContent = fileName;
+}
+
+function validateDocumentInput(file, fieldLabel, isRequired) {
+    if (!file) {
+        if (isRequired) return `${fieldLabel} is required.`;
+        return '';
+    }
+    const fileName = (file.name || '').toLowerCase();
+    const extension = fileName.includes('.') ? fileName.split('.').pop() : '';
+    if (!ALLOWED_DOC_EXTENSIONS.includes(extension)) {
+        return `${fieldLabel}: only JPG, JPEG, PNG, or PDF files are allowed.`;
+    }
+    if (file.size > MAX_DOC_SIZE_BYTES) {
+        return `${fieldLabel}: file size must be no more than 2MB.`;
+    }
+    return '';
+}
+
+function renderTagBadges(tags) {
+    if (!Array.isArray(tags) || !tags.length) return '<span class="text-muted">-</span>';
+    return tags.map(tag => `<span class="badge bg-secondary">${escapeHtml(tag.tag_name || '')}</span>`).join(' ');
+}
+
+function renderTagsCompact(tags, userId) {
+    if (!Array.isArray(tags) || !tags.length) return '<span class="text-muted">-</span>';
+    const first = tags[0];
+    if (tags.length === 1) return `<span class="badge bg-secondary">${escapeHtml(first.tag_name || '')}</span>`;
+
+    const dropdownId = `user-tags-${userId || 'new'}`;
+    const extraItems = tags.slice(1).map(
+        tag => `<li><span class="dropdown-item-text">${escapeHtml(tag.tag_name || '')}</span></li>`
+    ).join('');
+    return `
+        <span class="badge bg-secondary">${escapeHtml(first.tag_name || '')}</span>
+        <div class="dropdown d-inline-block ms-1">
+            <button class="btn btn-sm btn-outline-secondary py-0 px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-controls="${dropdownId}">
+                +${tags.length - 1}
+            </button>
+            <ul class="dropdown-menu" id="${dropdownId}">
+                ${extraItems}
+            </ul>
+        </div>
+    `;
+}
+
+let AVAILABLE_TAGS = [];
+
+function getSelectedTagIds(prefix) {
+    return Array.from(document.querySelectorAll(`#${prefix}_tags_menu input[type="checkbox"]:checked`))
+        .map(el => el.value)
+        .filter(Boolean);
+}
+
+function setSelectedTagIds(prefix, selectedIds) {
+    const selectedSet = new Set((selectedIds || []).map(String));
+    document.querySelectorAll(`#${prefix}_tags_menu input[type="checkbox"]`).forEach(el => {
+        el.checked = selectedSet.has(String(el.value));
+    });
+    updateTagDropdownLabel(prefix);
+}
+
+function updateTagDropdownLabel(prefix) {
+    const selected = getSelectedTagIds(prefix);
+    const btnText = document.querySelector(`#${prefix}_tags_btn span`);
+    if (!btnText) return;
+    if (!selected.length) {
+        btnText.textContent = 'Select Tags';
+        return;
+    }
+    const selectedNames = AVAILABLE_TAGS
+        .filter(tag => selected.includes(String(tag.id)))
+        .map(tag => tag.tag_name);
+    btnText.textContent = selectedNames.join(', ');
+}
+
+function renderTagMenu(prefix) {
+    const menu = document.getElementById(`${prefix}_tags_menu`);
+    if (!menu) return;
+    if (!AVAILABLE_TAGS.length) {
+        menu.innerHTML = '<li class="dropdown-item-text text-muted">No tags available</li>';
+        updateTagDropdownLabel(prefix);
+        return;
+    }
+    menu.innerHTML = AVAILABLE_TAGS.map(tag => `
+        <li>
+            <label class="dropdown-item d-flex align-items-center gap-2 mb-0">
+                <input class="form-check-input mt-0" type="checkbox" value="${tag.id}">
+                <span>${escapeHtml(tag.tag_name)}</span>
+            </label>
+        </li>
+    `).join('');
+    updateTagDropdownLabel(prefix);
+}
+
+async function loadAvailableTags() {
+    let page = 1;
+    let hasNext = true;
+    AVAILABLE_TAGS = [];
+    while (hasNext) {
+        const res = await authFetch(`/api/admin/tag/list/?page=${page}`, { method: 'GET' });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            showAlert('danger', data.message || 'Unable to load tags.');
+            return;
+        }
+        AVAILABLE_TAGS.push(...(data.results || []));
+        hasNext = Boolean(data.pagination && data.pagination.has_next);
+        page += 1;
+    }
+    renderTagMenu('create');
+    renderTagMenu('edit');
+}
+
+function renderUserRow(user) {
+    return `
+        <td>${escapeHtml(user.username || user.mobile || '')}</td>
+        <td>${escapeHtml(user.char_password || '')}</td>
+        <td>${escapeHtml(user.email || '')}</td>
+        <td>${escapeHtml(user.mobile || '')}</td>
+        <td>${renderTagsCompact(user.tags || [], user.id)}</td>
+        <td><span class="badge bg-info">${escapeHtml(roleLabel(user.role_key || user.role))}</span></td>
+        <td>${statusBadge(user.account_status)}</td>
+        <td>${escapeHtml(user.date_joined || '')}</td>
+        <td class="text-center">
+            <div class="d-flex gap-2 justify-content-end">
+                <button class="btn-action btn-view view-user" title="View Details" data-id="${user.id}">
+                    <i class="fa-regular fa-eye"></i>
+                </button>
+                <button class="btn-action btn-edit edit-user" title="Edit" data-id="${user.id}">
+                    <i class="fa-solid fa-pencil"></i>
+                </button>
+                <button class="btn-action btn-delete delete-user" title="Delete" data-id="${user.id}">
+                    <i class="fa-regular fa-trash-can"></i>
+                </button>
+            </div>
+        </td>
+    `;
+}
+
+const addUserBtn = document.getElementById('addUserBtn');
+if (addUserBtn && createUserModal) {
+    addUserBtn.addEventListener('click', function () {
+        createUserModal.show();
+    });
+}
+loadAvailableTags();
+document.addEventListener('change', function(e) {
+    const target = e.target;
+    if (!target.matches('#create_tags_menu input[type="checkbox"], #edit_tags_menu input[type="checkbox"]')) return;
+    const prefix = target.closest('#create_tags_menu') ? 'create' : 'edit';
+    const selectedCount = getSelectedTagIds(prefix).length;
+    if (selectedCount > 15) {
+        target.checked = false;
+        showAlert('danger', 'Please select at least 1 and maximum 15 tags.');
+        return;
+    }
+    updateTagDropdownLabel(prefix);
+});
+
+// ===================== PASSWORD TOGGLE =====================
+function togglePasswordVisibility(targetId) {
+    const input = document.getElementById(targetId);
+    const button = input.nextElementSibling;
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        button.innerHTML = '<i class="fas fa-eye-slash"></i>';
+    } else {
+        input.type = 'password';
+        button.innerHTML = '<i class="fas fa-eye"></i>';
+    }
+}
+
+// Event delegation for password toggles
+document.addEventListener('click', function(e) {
+    const toggleBtn = e.target.closest('.toggle-password');
+    if (toggleBtn) {
+        const targetId = toggleBtn.getAttribute('data-target');
+        togglePasswordVisibility(targetId);
+    }
+});
+// ===================== EVENT DELEGATION =====================
+document.addEventListener("click", function(e){
+
+    // -------- VIEW --------
+    if(e.target.classList.contains("view-user") || e.target.closest('.view-user')){
+        const btn = e.target.classList.contains("view-user") ? e.target : e.target.closest('.view-user');
+        const id = btn.dataset.id;
+
+        fetch(`/api/users/${id}/`)
+        .then(res => {
+            if (!res.ok) throw new Error('Network response was not ok');
+            return res.json();
+        })
+        .then(u => {
+            document.getElementById("view_username").textContent = u.username;
+            document.getElementById("view_email").textContent = u.email;
+            document.getElementById("view_mobile").textContent = u.mobile;
+            document.getElementById("view_role").textContent = u.role;
+            document.getElementById("view_first_name").textContent = u.first_name || '';
+            document.getElementById("view_last_name").textContent = u.last_name || '';
+            document.getElementById("view_pan_number").textContent = u.pan_number || 'N/A';
+            document.getElementById("view_gst_number").textContent = u.gst_number || 'N/A';
+            document.getElementById("view_char_password").textContent = u.char_password || 'N/A';
+            document.getElementById("view_account_status").textContent = u.account_status || 'active';
+            document.getElementById("view_suspension_reason").textContent = u.suspension_reason || 'N/A';
+            document.getElementById("view_tags").innerHTML = renderTagBadges(u.tags || []);
+            document.getElementById("view_date_joined").textContent = u.date_joined;
+            // Documents
+            document.getElementById("view_pan_image").innerHTML = u.pan_image ? `<a href="${u.pan_image}" target="_blank">View</a>` : 'N/A';
+            document.getElementById("view_gst_image").innerHTML = u.gst_image ? `<a href="${u.gst_image}" target="_blank">View</a>` : 'N/A';
+            document.getElementById("view_shopact_image").innerHTML = u.shopact_image ? `<a href="${u.shopact_image}" target="_blank">View</a>` : 'N/A';
+            document.getElementById("view_adharcard_image").innerHTML = u.adharcard_image ? `<a href="${u.adharcard_image}" target="_blank">View</a>` : 'N/A';
+            if (viewUserModal) viewUserModal.show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert("danger", "Error fetching user details: " + error.message);
+        });
+    }
+
+    // -------- EDIT --------
+    if(e.target.classList.contains("edit-user") || e.target.closest('.edit-user')){
+        const btn = e.target.classList.contains("edit-user") ? e.target : e.target.closest('.edit-user');
+        const id = btn.dataset.id;
+
+        fetch(`/api/users/${id}/`)
+        .then(res => {
+            if (!res.ok) throw new Error('Network response was not ok');
+            return res.json();
+        })
+        .then(u => {
+            document.getElementById("edit_user_id").value = u.id;
+            document.getElementById("edit_username").value = u.username;
+            document.getElementById("edit_email").value = u.email;
+            document.getElementById("edit_mobile").value = u.mobile;
+            document.getElementById("edit_role").value = u.role;
+            document.getElementById("edit_first_name").value = u.first_name || '';
+            document.getElementById("edit_last_name").value = u.last_name || '';
+            document.getElementById("edit_pan_number").value = u.pan_number || '';
+            document.getElementById("edit_gst_number").value = u.gst_number || '';
+            document.getElementById("edit_char_password").value = u.char_password || '';
+            document.getElementById("edit_account_status").value = u.account_status || 'active';
+            document.getElementById("edit_suspension_reason").value = u.suspension_reason || '';
+            if (!document.querySelector('#edit_tags_menu input[type="checkbox"]')) {
+                renderTagMenu('edit');
+            }
+            setSelectedTagIds('edit', (u.tags || []).map(tag => tag.id));
+            if (editModal) editModal.show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert("danger", "Error fetching user details for editing: " + error.message);
+        });
+    }
+
+    // -------- DELETE --------
+    if(e.target.classList.contains("delete-user") || e.target.closest('.delete-user')){
+        const btn = e.target.classList.contains("delete-user") ? e.target : e.target.closest('.delete-user');
+        deleteUserId = btn.dataset.id;
+        fetch(`/api/users/${deleteUserId}/`)
+        .then(res => {
+            if (!res.ok) throw new Error('Network response was not ok');
+            return res.json();
+        })
+        .then(u => {
+            document.getElementById("deleteText").innerHTML = 
+                `Are you sure you want to delete user <strong>${u.username}</strong>?`;
+            if (deleteModal) deleteModal.show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert("danger", "Error fetching user details for deletion: " + error.message);
+        });
+    }
+});
+
+// ===================== CREATE =====================
+document.getElementById("saveCreateUser").onclick = function(){
+    const panImage = document.getElementById("create_pan_image").files[0];
+    const gstImage = document.getElementById("create_gst_image").files[0];
+    const shopactImage = document.getElementById("create_shopact_image").files[0];
+    const adharcardImage = document.getElementById("create_adharcard_image").files[0];
+
+    const validationErrors = [
+        validateDocumentInput(panImage, 'PAN Image', true),  // PAN is required
+        validateDocumentInput(gstImage, 'GST Image', false),
+        validateDocumentInput(shopactImage, 'Shop Act Image', false),
+        validateDocumentInput(adharcardImage, 'Aadhaar Card Image', false),  // Aadhaar is optional
+    ].filter(Boolean);
+    if (validationErrors.length) {
+        showAlert("danger", validationErrors[0]);
+        return;
+    }
+    const selectedTagIds = getSelectedTagIds('create');
+    if (selectedTagIds.length < 1 || selectedTagIds.length > 15) {
+        showAlert("danger", "Please select at least 1 and maximum 15 tags.");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('email', document.getElementById("create_email").value);
+    formData.append('mobile', document.getElementById("create_mobile").value);
+    formData.append('password', document.getElementById("create_password").value);
+    formData.append('first_name', document.getElementById("create_first_name").value);
+    formData.append('last_name', document.getElementById("create_last_name").value);
+    formData.append('role', document.getElementById("create_role").value);
+    formData.append('account_status', document.getElementById("create_account_status").value);
+    formData.append('suspension_reason', document.getElementById("create_suspension_reason").value);
+    formData.append('pan_number', document.getElementById("create_pan_number").value);
+    formData.append('gst_number', document.getElementById("create_gst_number").value);
+    formData.append('char_password', document.getElementById("create_password").value);
+    selectedTagIds.forEach(tagId => formData.append('tag_ids', tagId));
+    if (panImage) formData.append('pan_image', panImage);
+    if (gstImage) formData.append('gst_image', gstImage);
+    if (shopactImage) formData.append('shopact_image', shopactImage);
+    if (adharcardImage) formData.append('adharcard_image', adharcardImage);
+
+    fetch('/api/users/create/',{
+        method:"POST",
+        headers:{
+            "X-CSRFToken":document.querySelector("[name=csrfmiddlewaretoken]").value
+        },
+        body:formData
+    })
+    .then(res=>res.json())
+    .then(r=>{
+        if(r.success){
+            if (createUserModal) createUserModal.hide();
+            showAlert("success", r.message);
+            if (r.user && r.user.id) {
+                const tableBody = document.getElementById('userTableBody');
+                const emptyRow = tableBody.querySelector('td[colspan="9"]');
+                if (emptyRow) tableBody.innerHTML = '';
+                const row = document.createElement('tr');
+                row.id = `user-row-${r.user.id}`;
+                row.innerHTML = renderUserRow(r.user);
+                tableBody.prepend(row);
+            }
+        }else{
+            showAlert("danger", r.message);
+        }
+    });
+};
+
+[
+    ['create_pan_image', 'create_pan_image_name'],
+    ['create_gst_image', 'create_gst_image_name'],
+    ['create_shopact_image', 'create_shopact_image_name'],
+    ['create_adharcard_image', 'create_adharcard_image_name'],
+].forEach(([inputId, outputId]) => {
+    const fileInput = document.getElementById(inputId);
+    if (!fileInput) return;
+    fileInput.addEventListener('change', function () {
+        setFileNamePreview(inputId, outputId);
+    });
+});
+
+// ===================== UPDATE =====================
+document.getElementById("saveEditUser").onclick = function(){
+    const id = document.getElementById("edit_user_id").value;
+    const selectedTagIds = getSelectedTagIds('edit');
+    if (selectedTagIds.length < 1 || selectedTagIds.length > 15) {
+        showAlert("danger", "Please select at least 1 and maximum 15 tags.");
+        return;
+    }
+
+    const userData = {
+        email: document.getElementById("edit_email").value,
+        mobile: document.getElementById("edit_mobile").value,
+        first_name: document.getElementById("edit_first_name").value,
+        last_name: document.getElementById("edit_last_name").value,
+        role: document.getElementById("edit_role").value,
+        account_status: document.getElementById("edit_account_status").value,
+        suspension_reason: document.getElementById("edit_suspension_reason").value,
+        pan_number: document.getElementById("edit_pan_number").value,
+        gst_number: document.getElementById("edit_gst_number").value,
+        tag_ids: selectedTagIds,
+        char_password: document.getElementById("edit_char_password").value,
+        is_active: true
+    };
+
+    fetch(`/api/users/${id}/update/`,{
+        method:"POST",
+        headers:{
+            "Content-Type":"application/json",
+            "X-CSRFToken":document.querySelector("[name=csrfmiddlewaretoken]").value
+        },
+        body:JSON.stringify(userData)
+    })
+    .then(res=>res.json())
+    .then(r=>{
+        if(r.success){
+            if (editModal) editModal.hide();
+            showAlert("success", r.message);
+            if (r.user && r.user.id) {
+                const row = document.getElementById(`user-row-${r.user.id}`);
+                if (row) row.innerHTML = renderUserRow(r.user);
+            }
+        }else{
+            showAlert("danger", r.message);
+        }
+    });
+};
+
+// ===================== DELETE =====================
+document.getElementById("confirmDelete").onclick = function(){
+    fetch(`/api/users/${deleteUserId}/delete/`,{
+        method:"POST",
+        headers:{
+            "X-CSRFToken":document.querySelector("[name=csrfmiddlewaretoken]").value
+        }
+    })
+    .then(res=>res.json())
+    .then(r=>{
+        if(r.success){
+            if (deleteModal) deleteModal.hide();
+            document.getElementById(`user-row-${deleteUserId}`).remove();
+            showAlert("success", r.message);
+        }
+    });
+};
+
+// ===================== SAFETY CLEANUP =====================
+document.addEventListener("hidden.bs.modal", function(){
+    document.body.classList.remove("modal-open");
+    document.querySelectorAll(".modal-backdrop").forEach(b=>b.remove());
+});
+</script>
+{% endblock %}

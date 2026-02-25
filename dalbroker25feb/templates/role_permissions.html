@@ -1,0 +1,645 @@
+{% extends "base.html" %}
+{% block title %}Role-Based Permissions{% endblock %}
+
+{% block content %}
+
+{% load custom_filters %}
+
+<style>
+    @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@600;700&display=swap");
+
+    :root {
+        --perm-bg-1: #f4f8ff;
+        --perm-bg-2: #eef3ff;
+        --perm-surface: #ffffff;
+        --perm-border: #c8d6f9;
+        --perm-line: #e5edff;
+        --perm-primary: #1f6feb;
+        --perm-primary-dark: #135ad3;
+        --perm-text: #1a2a4a;
+        --perm-muted: #7081a3;
+        --perm-shadow: 0 16px 40px rgba(31, 111, 235, 0.08);
+    }
+
+    .permission-page {
+        font-family: "Manrope", sans-serif;
+        background: radial-gradient(circle at 0% 0%, #f8fbff, #f3f8ff 34%, #eef4ff 100%);
+        border: 1px solid #dce7ff;
+        border-radius: 28px;
+        padding: 1.5rem;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+    }
+
+    .permission-shell {
+        background: linear-gradient(160deg, var(--perm-bg-1) 0%, var(--perm-bg-2) 100%);
+        border: 1px solid #d4e2ff;
+        border-radius: 24px;
+        padding: 1.2rem;
+    }
+
+    .permission-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+        background: rgba(255, 255, 255, 0.75);
+        border: 1px solid #d8e5ff;
+        border-radius: 16px;
+        padding: 0.9rem;
+        margin-bottom: 1.2rem;
+    }
+
+    .permission-toolbar-left,
+    .permission-toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        flex-wrap: wrap;
+    }
+
+    .perm-role-label {
+        font-weight: 700;
+        color: var(--perm-muted);
+        margin: 0;
+    }
+
+    .perm-select {
+        border: 2px solid #9ec1ff;
+        border-radius: 999px;
+        padding: 0.55rem 2.4rem 0.55rem 0.9rem;
+        font-weight: 700;
+        color: var(--perm-text);
+        background-color: #fff;
+        min-width: 180px;
+    }
+
+    .perm-btn {
+        border: none;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        padding: 0.56rem 1.05rem;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .perm-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .perm-btn-light {
+        background: #e9f0ff;
+        color: #496391;
+    }
+
+    .perm-btn-primary {
+        background: linear-gradient(135deg, var(--perm-primary), var(--perm-primary-dark));
+        color: #fff;
+        box-shadow: 0 10px 20px rgba(31, 111, 235, 0.22);
+    }
+
+    .permission-status {
+        margin: 0;
+        color: var(--perm-muted);
+        font-size: 0.85rem;
+        font-weight: 700;
+    }
+
+    .permission-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 1rem;
+    }
+
+    .permission-card {
+        background: var(--perm-surface);
+        border: 2px solid var(--perm-border);
+        border-radius: 20px;
+        padding: 1rem;
+        box-shadow: var(--perm-shadow);
+    }
+
+    .permission-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.75rem;
+    }
+
+    .permission-card h5 {
+        font-family: "Sora", sans-serif;
+        margin: 0;
+        font-size: 0.95rem;
+        color: var(--perm-text);
+        text-transform: capitalize;
+    }
+
+    .permission-count {
+        font-size: 0.78rem;
+        color: var(--perm-muted);
+        font-weight: 800;
+    }
+
+    .permission-action-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.58rem 0;
+        border-bottom: 1px solid var(--perm-line);
+    }
+
+    .permission-action-row:last-child {
+        border-bottom: none;
+    }
+
+    .permission-action-name {
+        margin: 0;
+        font-weight: 700;
+        color: #2f446f;
+        text-transform: capitalize;
+    }
+
+    .permission-toggle {
+        position: relative;
+        width: 46px;
+        height: 26px;
+        flex-shrink: 0;
+    }
+
+    .permission-toggle input[type="checkbox"] {
+        display: none;
+    }
+
+    .permission-toggle label {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border-radius: 999px;
+        background: #d2def8;
+        border: 1px solid #bed1f7;
+        cursor: pointer;
+        transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .permission-toggle label::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 4px 10px rgba(19, 90, 211, 0.2);
+        transition: transform 0.2s ease;
+    }
+
+    .permission-toggle input[type="checkbox"]:checked + label {
+        background: linear-gradient(135deg, #2f83ff, #2368de);
+        border-color: #2368de;
+    }
+
+    .permission-toggle input[type="checkbox"]:checked + label::after {
+        transform: translateX(20px);
+    }
+
+    .permission-empty {
+        margin: 0;
+        color: var(--perm-muted);
+        font-weight: 700;
+        background: #fff;
+        border: 1px dashed #c1d5ff;
+        border-radius: 12px;
+        padding: 1rem;
+        text-align: center;
+    }
+
+    .permission-toast {
+        position: fixed;
+        right: 18px;
+        top: 18px;
+        z-index: 1200;
+        background: #173565;
+        color: #fff;
+        border-radius: 12px;
+        padding: 0.7rem 0.9rem;
+        font-size: 0.84rem;
+        font-weight: 700;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(-8px);
+        transition: all 0.2s ease;
+    }
+
+    .permission-toast.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    @media (max-width: 768px) {
+        .permission-page {
+            padding: 1rem;
+            border-radius: 16px;
+        }
+
+        .permission-shell {
+            border-radius: 14px;
+            padding: 0.8rem;
+        }
+
+        .perm-select {
+            min-width: 145px;
+        }
+    }
+</style>
+<div class="page-header">
+  <!-- Breadcrumb -->
+  <nav class="breadcrumb-custom" aria-label="breadcrumb">
+      <a href="/dashboard/">Dashboard</a>
+     <!--  <i class="separator fa fa-chevron-right"></i>
+      <a href="#">Master</a> -->
+      <i class="separator fa fa-chevron-right"></i>
+      <span class="active">User Permissions</span>
+  </nav>
+  
+  <!-- Page Title -->
+  <div class="d-flex justify-content-between align-items-center">
+      <h1 class="page-title">User Permissions</h1>
+  </div>
+</div>
+
+
+
+<div class="permission-page">
+    <div class="permission-shell">
+        <!-- Messages -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <div class="permission-toolbar">
+            <div class="permission-toolbar-left">
+                <p class="perm-role-label">Select Role:</p>
+                <select class="perm-select" id="roleFilter"></select>
+                <button type="button" class="perm-btn perm-btn-light" id="resetRoleBtn">
+                    Reset Role
+                </button>
+            </div>
+            <div class="permission-toolbar-right">
+                <p class="permission-status" id="permissionStatusText">Ready</p>
+                <button type="button" class="perm-btn perm-btn-light" id="refreshPermissionsBtn">
+                    Refresh
+                </button>
+                <button type="button" class="perm-btn perm-btn-primary" id="savePermissionsBtn">
+                    Save Changes
+                </button>
+            </div>
+        </div>
+
+        <div class="permission-grid" id="permissionCards">
+            <!-- Cards populated by JavaScript -->
+        </div>
+
+        <div class="mt-3 d-flex flex-wrap gap-3">
+            <div class="d-flex align-items-center gap-2">
+                <div class="permission-toggle">
+                    <input type="checkbox" checked id="legendAllow">
+                    <label for="legendAllow"></label>
+                </div>
+                <span class="permission-status">Permission Granted</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <div class="permission-toggle">
+                    <input type="checkbox" id="legendDeny">
+                    <label for="legendDeny"></label>
+                </div>
+                <span class="permission-status">Permission Denied</span>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="permission-toast" id="permissionToast"></div>
+
+<script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+            const cookies = document.cookie.split(";");
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + "=")) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    const csrftoken = getCookie("csrftoken");
+    const roles = {{ roles_json|safe }};
+    const modules = {{ modules_json|safe }};
+    const actions = {{ actions_json|safe }};
+    let selectedRole = null;
+    let permMap = {};
+
+    function humanize(value) {
+        return String(value || "")
+            .replace(/_/g, " ")
+            .replace(/\b\w/g, function(ch) { return ch.toUpperCase(); });
+    }
+
+    function showToast(message) {
+        const toast = document.getElementById("permissionToast");
+        toast.textContent = message;
+        toast.classList.add("show");
+        setTimeout(function() {
+            toast.classList.remove("show");
+        }, 1800);
+    }
+    async function parseApiResponse(response) {
+        let data = {};
+        try {
+            data = await response.json();
+        } catch (e) {
+            data = {};
+        }
+        if (!response.ok || data.success === false) {
+            throw new Error(data.message || "Request failed");
+        }
+        return data;
+    }
+
+    function setStatus(message) {
+        const statusEl = document.getElementById("permissionStatusText");
+        if (statusEl) {
+            statusEl.textContent = message;
+        }
+    }
+
+    function buildPermMap(permissions) {
+        const map = {};
+        permissions.forEach(function(perm) {
+            const key = perm.role + "|" + perm.module + "|" + perm.action;
+            map[key] = perm.is_allowed === true;
+        });
+        return map;
+    }
+
+    function populateRoleFilter() {
+        const roleFilter = document.getElementById("roleFilter");
+        roleFilter.innerHTML = "";
+        roles.forEach(function(role) {
+            const option = document.createElement("option");
+            option.value = role;
+            option.textContent = humanize(role);
+            roleFilter.appendChild(option);
+        });
+        if (!selectedRole && roles.length > 0) {
+            selectedRole = roles[0];
+        }
+        roleFilter.value = selectedRole || "";
+    }
+
+    function getRoleModuleEnabledCount(role, module) {
+        let enabled = 0;
+        actions.forEach(function(action) {
+            const key = role + "|" + module + "|" + action;
+            if (permMap[key] === true) {
+                enabled += 1;
+            }
+        });
+        return enabled;
+    }
+
+    function renderPermissionCards() {
+        const cardsWrap = document.getElementById("permissionCards");
+        cardsWrap.innerHTML = "";
+
+        if (!selectedRole) {
+            cardsWrap.innerHTML = '<p class="permission-empty">No role available.</p>';
+            return;
+        }
+
+        modules.forEach(function(module) {
+            const card = document.createElement("article");
+            card.className = "permission-card";
+
+            const head = document.createElement("div");
+            head.className = "permission-card-head";
+
+            const moduleTitle = document.createElement("h5");
+            moduleTitle.textContent = humanize(module);
+
+            const count = document.createElement("span");
+            count.className = "permission-count";
+            count.textContent = getRoleModuleEnabledCount(selectedRole, module) + "/" + actions.length + " enabled";
+
+            head.appendChild(moduleTitle);
+            head.appendChild(count);
+            card.appendChild(head);
+
+            actions.forEach(function(action) {
+                const row = document.createElement("div");
+                row.className = "permission-action-row";
+
+                const name = document.createElement("p");
+                name.className = "permission-action-name";
+                name.textContent = humanize(action);
+
+                const toggleWrap = document.createElement("div");
+                toggleWrap.className = "permission-toggle";
+
+                const checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.id = "perm_" + selectedRole + "_" + module + "_" + action;
+                checkbox.dataset.role = selectedRole;
+                checkbox.dataset.module = module;
+                checkbox.dataset.action = action;
+                checkbox.checked = permMap[selectedRole + "|" + module + "|" + action] === true;
+                checkbox.addEventListener("change", handlePermissionChange);
+
+                const label = document.createElement("label");
+                label.setAttribute("for", checkbox.id);
+
+                toggleWrap.appendChild(checkbox);
+                toggleWrap.appendChild(label);
+                row.appendChild(name);
+                row.appendChild(toggleWrap);
+                card.appendChild(row);
+            });
+
+            cardsWrap.appendChild(card);
+        });
+    }
+
+    async function loadPermissionsMatrix() {
+        setStatus("Loading latest permissions...");
+        try {
+            const response = await fetch('{% url "permissions_matrix" %}', {
+                method: "GET",
+                credentials: "same-origin"
+            });
+            const data = await parseApiResponse(response);
+
+            permMap = buildPermMap(data.permissions || []);
+            populateRoleFilter();
+            renderPermissionCards();
+            setStatus("Live updates are enabled");
+        } catch (error) {
+            console.error("Error loading permissions:", error);
+            setStatus("Load failed");
+            alert("Error loading permissions: " + error.message);
+        }
+    }
+
+    async function handlePermissionChange(event) {
+        const checkbox = event.target;
+        const role = checkbox.dataset.role;
+        const module = checkbox.dataset.module;
+        const action = checkbox.dataset.action;
+        const isAllowed = checkbox.checked;
+        const key = role + "|" + module + "|" + action;
+        const previous = permMap[key] === true;
+
+        checkbox.disabled = true;
+        setStatus("Saving " + humanize(action) + " for " + humanize(module) + "...");
+
+        try {
+            const response = await fetch('{% url "update_permission" %}', {
+                method: "POST",
+                credentials: "same-origin"
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrftoken
+                },
+                body: JSON.stringify({
+                    role: role,
+                    module: module,
+                    action: action,
+                    is_allowed: isAllowed
+                })
+            });
+
+            await parseApiResponse(response);
+
+            permMap[key] = isAllowed;
+            renderPermissionCards();
+            setStatus("Saved just now");
+            showToast("Permission updated");
+        } catch (error) {
+            console.error("Error updating permission:", error);
+            permMap[key] = previous;
+            checkbox.checked = previous;
+            setStatus("Update failed");
+            alert("Error updating permission: " + error.message);
+        } finally {
+            checkbox.disabled = false;
+        }
+    }
+
+    async function updateSinglePermission(role, module, action, isAllowed) {
+        const response = await fetch('{% url "update_permission" %}', {
+            method: "POST",
+            credentials: "same-origin"
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrftoken
+            },
+            body: JSON.stringify({
+                role: role,
+                module: module,
+                action: action,
+                is_allowed: isAllowed
+            })
+        });
+
+        await parseApiResponse(response);
+        return data;
+    }
+
+    async function applyBulkPermission(isAllowed) {
+        if (!selectedRole) {
+            showToast("No role selected");
+            return;
+        }
+
+        setStatus(isAllowed ? "Enabling all permissions..." : "Disabling all permissions...");
+        const legendAllow = document.getElementById("legendAllow");
+        const legendDeny = document.getElementById("legendDeny");
+        legendAllow.disabled = true;
+        legendDeny.disabled = true;
+
+        try {
+            for (const module of modules) {
+                for (const action of actions) {
+                    await updateSinglePermission(selectedRole, module, action, isAllowed);
+                    permMap[selectedRole + "|" + module + "|" + action] = isAllowed;
+                }
+            }
+
+            renderPermissionCards();
+            legendAllow.checked = isAllowed;
+            legendDeny.checked = !isAllowed;
+            setStatus("Saved just now");
+            showToast(isAllowed ? "All permissions granted" : "All permissions denied");
+        } catch (error) {
+            console.error("Bulk update error:", error);
+            setStatus("Bulk update failed");
+            alert("Error updating permissions: " + error.message);
+        } finally {
+            legendAllow.disabled = false;
+            legendDeny.disabled = false;
+        }
+    }
+
+    document.getElementById("roleFilter").addEventListener("change", function(event) {
+        selectedRole = event.target.value;
+        renderPermissionCards();
+        setStatus("Viewing " + humanize(selectedRole) + " permissions");
+    });
+
+    document.getElementById("refreshPermissionsBtn").addEventListener("click", function() {
+        loadPermissionsMatrix();
+        showToast("Permissions refreshed");
+    });
+
+    document.getElementById("resetRoleBtn").addEventListener("click", function() {
+        loadPermissionsMatrix();
+        showToast("Role permissions reset");
+    });
+
+    document.getElementById("savePermissionsBtn").addEventListener("click", function() {
+        setStatus("All changes are auto-saved");
+        showToast("All changes already saved");
+    });
+
+    document.getElementById("legendAllow").addEventListener("change", function(event) {
+        if (!event.target.checked) {
+            event.target.checked = true;
+            return;
+        }
+        document.getElementById("legendDeny").checked = false;
+        applyBulkPermission(true);
+    });
+
+    document.getElementById("legendDeny").addEventListener("change", function(event) {
+        if (!event.target.checked) {
+            event.target.checked = true;
+            return;
+        }
+        document.getElementById("legendAllow").checked = false;
+        applyBulkPermission(false);
+    });
+
+    document.addEventListener("DOMContentLoaded", function() {
+        loadPermissionsMatrix();
+    });
+</script>
+{% endblock %}

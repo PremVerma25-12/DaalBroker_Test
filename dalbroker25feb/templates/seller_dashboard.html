@@ -1,0 +1,844 @@
+{% extends 'base.html' %}
+
+{% block title %}Seller Dashboard{% endblock %}
+
+{% block content %}
+<head>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root{
+      --primary:#0f172a;
+      --muted:#64748b;
+      --muted2:#94a3b8;
+      --card:#ffffff;
+      --bg:#f8fafc;
+      --border:#e2e8f0;
+
+      --blue:#3b82f6;
+      --green:#10b981;
+      --amber:#f59e0b;
+      --red:#ef4444;
+      --purple:#8b5cf6;
+      --cyan:#06b6d4;
+
+      --shadow-sm: 0 1px 2px rgba(0,0,0,.05);
+      --shadow-md: 0 6px 18px rgba(15,23,42,.08);
+    }
+
+    .seller-wrap{
+      padding: .25rem 0 1.25rem;
+    }
+
+    .page-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:1rem;
+      flex-wrap:wrap;
+      margin-bottom:1.25rem;
+    }
+
+    .page-head h2{
+      margin:0;
+      font-weight:900;
+      color:var(--primary);
+      letter-spacing:.2px;
+    }
+
+    .page-sub{
+      color:var(--muted);
+      margin:.25rem 0 0;
+      font-size:.9rem;
+    }
+
+    /* KPI grid */
+    .kpi-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+      gap:1rem;
+      margin-bottom:1.25rem;
+    }
+
+    .kpi{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:1.15rem 1.15rem 1rem;
+      box-shadow:var(--shadow-md);
+      position:relative;
+      overflow:hidden;
+      min-height:120px;
+      transition:.2s ease;
+    }
+
+    .kpi:hover{
+      transform:translateY(-2px);
+    }
+
+    .kpi::before{
+      content:"";
+      position:absolute;
+      left:0; top:0; right:0;
+      height:4px;
+      background:linear-gradient(90deg,var(--blue),var(--green));
+    }
+
+    .kpi.green::before{ background:linear-gradient(90deg,var(--green),#34d399); }
+    .kpi.amber::before{ background:linear-gradient(90deg,var(--amber),#fbbf24); }
+    .kpi.red::before{ background:linear-gradient(90deg,var(--red),#f87171); }
+    .kpi.purple::before{ background:linear-gradient(90deg,var(--purple),#a78bfa); }
+    .kpi.cyan::before{ background:linear-gradient(90deg,var(--cyan),#22d3ee); }
+
+    .kpi-top{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:.75rem;
+      margin-bottom:.65rem;
+    }
+
+    .kpi-icon{
+      width:46px;height:46px;
+      border-radius:14px;
+      display:flex;align-items:center;justify-content:center;
+      font-size:1.2rem;
+      background:rgba(59,130,246,.10);
+      color:var(--blue);
+    }
+
+    .kpi.green .kpi-icon{ background:rgba(16,185,129,.10); color:var(--green); }
+    .kpi.amber .kpi-icon{ background:rgba(245,158,11,.12); color:var(--amber); }
+    .kpi.red .kpi-icon{ background:rgba(239,68,68,.10); color:var(--red); }
+    .kpi.purple .kpi-icon{ background:rgba(139,92,246,.10); color:var(--purple); }
+    .kpi.cyan .kpi-icon{ background:rgba(6,182,212,.10); color:var(--cyan); }
+
+    .kpi-title{
+      font-size:.78rem;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      color:var(--muted);
+      margin:0 0 .25rem;
+    }
+
+    .kpi-value{
+      font-size:1.75rem;
+      font-weight:950;
+      color:var(--primary);
+      line-height:1.05;
+      margin:0;
+      font-family:"Outfit",system-ui;
+    }
+
+    .kpi-sub{
+      margin:.4rem 0 0;
+      color:var(--muted);
+      font-size:.85rem;
+    }
+
+    .kpi-change{
+      margin-top:.4rem;
+      font-size:.82rem;
+      font-weight:800;
+      color:var(--muted);
+      display:flex;
+      align-items:center;
+      gap:.35rem;
+      white-space:nowrap;
+    }
+    .kpi-change.pos{ color:var(--green); }
+    .kpi-change.neg{ color:var(--red); }
+
+    /* Cards */
+    .cardx{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:1.15rem;
+      box-shadow:var(--shadow-md);
+      margin-bottom:1rem;
+    }
+
+    .cardx-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:.75rem;
+      padding-bottom:.85rem;
+      margin-bottom:1rem;
+      border-bottom:1px solid var(--border);
+      flex-wrap:wrap;
+    }
+
+    .cardx-title{
+      margin:0;
+      font-size:1.02rem;
+      font-weight:900;
+      color:var(--primary);
+    }
+
+    .filters{
+      display:flex;
+      gap:.5rem;
+      flex-wrap:wrap;
+    }
+
+    .fbtn{
+      border:1px solid var(--border);
+      background:transparent;
+      border-radius:12px;
+      padding:.45rem .8rem;
+      font-weight:850;
+      font-size:.85rem;
+      color:var(--muted);
+      cursor:pointer;
+      transition:.15s ease;
+      user-select:none;
+    }
+    .fbtn:hover,.fbtn.active{
+      background:var(--blue);
+      color:#fff;
+      border-color:var(--blue);
+    }
+
+    /* Status badges */
+    .sb{
+      display:inline-flex;
+      align-items:center;
+      gap:.35rem;
+      padding:.32rem .65rem;
+      border-radius:999px;
+      font-weight:850;
+      font-size:.75rem;
+      white-space:nowrap;
+    }
+    .sb::before{
+      content:"";
+      width:7px;height:7px;border-radius:50%;
+      background:currentColor;
+      opacity:.95;
+    }
+    .sb.ok{ background:rgba(16,185,129,.12); color:var(--green); }
+    .sb.warn{ background:rgba(245,158,11,.12); color:var(--amber); }
+    .sb.bad{ background:rgba(239,68,68,.12); color:var(--red); }
+    .sb.info{ background:rgba(59,130,246,.12); color:var(--blue); }
+    .sb.purp{ background:rgba(139,92,246,.12); color:var(--purple); }
+
+    /* Tables */
+    .table thead th{
+      white-space:nowrap;
+      font-size:.72rem;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      color:var(--primary);
+      font-weight:900;
+      background:var(--bg);
+      border-top:0;
+    }
+    .table td{
+      vertical-align:middle;
+      white-space:nowrap;
+    }
+
+    /* Small list */
+    .mini{
+      display:flex;
+      flex-direction:column;
+      gap:.75rem;
+    }
+    .mini-row{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:1rem;
+      padding:.8rem;
+      background:var(--bg);
+      border:1px solid var(--border);
+      border-radius:14px;
+    }
+    .mini-row h6{
+      margin:0 0 .15rem;
+      font-weight:900;
+      color:var(--primary);
+      font-size:.92rem;
+    }
+    .mini-row p{
+      margin:0;
+      color:var(--muted);
+      font-size:.84rem;
+    }
+    .mini-right{
+      text-align:right;
+      color:var(--muted2);
+      font-size:.8rem;
+      white-space:nowrap;
+    }
+
+    @media(max-width:768px){
+      .mini-row{ flex-direction:column; }
+      .mini-right{ text-align:left; }
+    }
+  </style>
+</head>
+
+<div class="seller-wrap">
+  {% include 'includes/kyc_status_card.html' %}
+  <div class="page-head">
+    <div>
+      <h2>Seller Dashboard</h2>
+      <p class="page-sub">Welcome, {{ user.username }}! Track your brands, deals, contracts & transport.</p>
+    </div>
+    <div class="text-muted small">
+      <span id="sellerNow"></span>
+    </div>
+  </div>
+
+  <!-- KPI SECTION -->
+  <div class="kpi-grid">
+    <div class="kpi green">
+      <div class="kpi-top">
+        <div class="kpi-icon"><i class="fas fa-rupee-sign"></i></div>
+      </div>
+      <div class="kpi-title">Earnings (MTD)</div>
+      <p class="kpi-value" id="kpiEarnings">—</p>
+      <div class="kpi-change pos"><i class="fas fa-arrow-up"></i><span id="kpiEarningsDelta">—</span></div>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-top">
+        <div class="kpi-icon"><i class="fas fa-handshake"></i></div>
+      </div>
+      <div class="kpi-title">Active Deals</div>
+      <p class="kpi-value" id="kpiActiveDeals">—</p>
+      <p class="kpi-sub">Negotiations: <strong id="kpiNegotiations">—</strong></p>
+    </div>
+
+    <div class="kpi purple">
+      <div class="kpi-top">
+        <div class="kpi-icon"><i class="fas fa-file-signature"></i></div>
+      </div>
+      <div class="kpi-title">Active Contracts</div>
+      <p class="kpi-value" id="kpiActiveContracts">—</p>
+      <p class="kpi-sub">Signed this month: <strong id="kpiSignedMTD">—</strong></p>
+    </div>
+
+    <div class="kpi cyan">
+      <div class="kpi-top">
+        <div class="kpi-icon"><i class="fas fa-boxes"></i></div>
+      </div>
+      <div class="kpi-title">Total Listings</div>
+      <p class="kpi-value" id="kpiListings">—</p>
+      <p class="kpi-sub">Brands: <strong id="kpiBrands">—</strong></p>
+    </div>
+
+    <div class="kpi amber">
+      <div class="kpi-top">
+        <div class="kpi-icon"><i class="fas fa-truck"></i></div>
+      </div>
+      <div class="kpi-title">In Transit</div>
+      <p class="kpi-value" id="kpiInTransit">—</p>
+      <p class="kpi-sub">Avg transit: <strong id="kpiAvgTransit">—</strong></p>
+    </div>
+
+    <div class="kpi red">
+      <div class="kpi-top">
+        <div class="kpi-icon"><i class="fas fa-exclamation-triangle"></i></div>
+      </div>
+      <div class="kpi-title">Issues / Returns</div>
+      <p class="kpi-value" id="kpiIssues">—</p>
+      <p class="kpi-sub">Open complaints: <strong id="kpiComplaints">—</strong></p>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-top">
+        <div class="kpi-icon"><i class="fas fa-percentage"></i></div>
+      </div>
+      <div class="kpi-title">Conversion Rate</div>
+      <p class="kpi-value" id="kpiConversion">—</p>
+      <p class="kpi-sub">Avg time-to-close: <strong id="kpiTTC">—</strong></p>
+    </div>
+
+    <div class="kpi green">
+      <div class="kpi-top">
+        <div class="kpi-icon"><i class="fas fa-star"></i></div>
+      </div>
+      <div class="kpi-title">Top Brand (MTD)</div>
+      <p class="kpi-value" id="kpiTopBrand">—</p>
+      <p class="kpi-sub">Share: <strong id="kpiTopBrandShare">—</strong></p>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="row">
+    <div class="col-lg-8">
+      <div class="cardx">
+        <div class="cardx-head">
+          <h4 class="cardx-title">Earnings & Deals Trend</h4>
+          <div class="filters" id="trendFilters">
+            <button class="fbtn active" data-range="7D">7D</button>
+            <button class="fbtn" data-range="1M">1M</button>
+            <button class="fbtn" data-range="3M">3M</button>
+            <button class="fbtn" data-range="1Y">1Y</button>
+          </div>
+        </div>
+        <canvas id="earningsDealsChart" height="90"></canvas>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="cardx">
+        <div class="cardx-head">
+          <h4 class="cardx-title">Brand Performance (GTV)</h4>
+        </div>
+        <canvas id="brandPerformanceChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-4">
+      <div class="cardx">
+        <div class="cardx-head">
+          <h4 class="cardx-title">Commodity Mix (Volume)</h4>
+        </div>
+        <canvas id="commodityMixChart" height="200"></canvas>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="cardx">
+        <div class="cardx-head">
+          <h4 class="cardx-title">Deal Pipeline</h4>
+        </div>
+        <canvas id="dealPipelineChart" height="200"></canvas>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="cardx">
+        <div class="cardx-head">
+          <h4 class="cardx-title">Transport Status</h4>
+        </div>
+        <canvas id="transportStatusChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECENT DEALS + RECENT CONTRACTS -->
+  <div class="row">
+    <div class="col-lg-5">
+      <div class="cardx">
+        <div class="cardx-head">
+          <h4 class="cardx-title">Recent Deals</h4>
+        </div>
+
+        <div class="mini">
+          <div class="mini-row">
+            <div>
+              <h6>#DL-5019 • Shree Foods</h6>
+              <p>Brand: <strong>Ratan Toor</strong> • Toor Dal • 60 Qtl @ ₹7,180/qtl</p>
+              <span class="sb info">Negotiation</span>
+            </div>
+            <div class="mini-right">Updated 12 min ago</div>
+          </div>
+
+          <div class="mini-row">
+            <div>
+              <h6>#DL-5014 • MNO Industries</h6>
+              <p>Brand: <strong>Katni Gold</strong> • Moong Dal • 40 Qtl @ ₹8,240/qtl</p>
+              <span class="sb purp">Deal Locked</span>
+            </div>
+            <div class="mini-right">Updated 2 hrs ago</div>
+          </div>
+
+          <div class="mini-row">
+            <div>
+              <h6>#DL-5008 • PQR Buyers</h6>
+              <p>Brand: <strong>Narmada Fresh</strong> • Chana Dal • 55 Qtl @ ₹6,020/qtl</p>
+              <span class="sb warn">Awaiting Buyer PO</span>
+            </div>
+            <div class="mini-right">Updated Today</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="cardx">
+        <div class="cardx-head">
+          <h4 class="cardx-title">Recent Contracts</h4>
+          <div class="text-muted small">Includes transport & payment highlights</div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-striped align-middle">
+            <thead>
+              <tr>
+                <th>Contract</th>
+                <th>Buyer</th>
+                <th>Brand</th>
+                <th>Commodity</th>
+                <th>Qty</th>
+                <th>Value</th>
+                <th>Payment</th>
+                <th>Transport</th>
+                <th>ETA</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>#CNT-7812</strong></td>
+                <td>Shree Foods</td>
+                <td>Ratan Toor</td>
+                <td>Toor Dal</td>
+                <td>80 Qtl</td>
+                <td>₹5,74,400</td>
+                <td><span class="sb warn">Partial</span></td>
+                <td><span class="sb info">In Transit</span></td>
+                <td>Feb 05</td>
+              </tr>
+              <tr>
+                <td><strong>#CNT-7811</strong></td>
+                <td>MNO Industries</td>
+                <td>Katni Gold</td>
+                <td>Moong Dal</td>
+                <td>40 Qtl</td>
+                <td>₹3,29,600</td>
+                <td><span class="sb ok">Paid</span></td>
+                <td><span class="sb ok">Delivered</span></td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <td><strong>#CNT-7810</strong></td>
+                <td>PQR Buyers</td>
+                <td>Narmada Fresh</td>
+                <td>Chana Dal</td>
+                <td>65 Qtl</td>
+                <td>₹3,91,300</td>
+                <td><span class="sb bad">Pending</span></td>
+                <td><span class="sb warn">Pickup Due</span></td>
+                <td>Feb 06</td>
+              </tr>
+              <tr>
+                <td><strong>#CNT-7808</strong></td>
+                <td>YZA Retailers</td>
+                <td>Katni Gold</td>
+                <td>Masoor Dal</td>
+                <td>70 Qtl</td>
+                <td>₹4,18,600</td>
+                <td><span class="sb warn">Partial</span></td>
+                <td><span class="sb info">In Transit</span></td>
+                <td>Feb 04</td>
+              </tr>
+              <tr>
+                <td><strong>#CNT-7806</strong></td>
+                <td>STU Wholesale</td>
+                <td>Ratan Toor</td>
+                <td>Urad Dal</td>
+                <td>55 Qtl</td>
+                <td>₹4,31,750</td>
+                <td><span class="sb ok">Paid</span></td>
+                <td><span class="sb ok">Delivered</span></td>
+                <td>—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- TRANSPORT TRACKING TABLE -->
+  <div class="cardx">
+    <div class="cardx-head">
+      <h4 class="cardx-title">Transport Tracking</h4>
+      <div class="text-muted small">Latest LR/Trip updates</div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-striped align-middle">
+        <thead>
+          <tr>
+            <th>LR / Trip</th>
+            <th>Contract</th>
+            <th>Transporter</th>
+            <th>From → To</th>
+            <th>Status</th>
+            <th>Last Scan</th>
+            <th>ETA</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>LR-11208</strong></td>
+            <td>#CNT-7812</td>
+            <td>TransCo Logistics</td>
+            <td>Nagpur → Pune</td>
+            <td><span class="sb info">In Transit</span></td>
+            <td>Feb 03, 11:20</td>
+            <td>Feb 05</td>
+          </tr>
+          <tr>
+            <td><strong>LR-11177</strong></td>
+            <td>#CNT-7808</td>
+            <td>FastMove Carriers</td>
+            <td>Katni → Indore</td>
+            <td><span class="sb info">In Transit</span></td>
+            <td>Feb 03, 09:05</td>
+            <td>Feb 04</td>
+          </tr>
+          <tr>
+            <td><strong>LR-11151</strong></td>
+            <td>#CNT-7810</td>
+            <td>RoadRunner Transport</td>
+            <td>Indore → Bhopal</td>
+            <td><span class="sb warn">Pickup Due</span></td>
+            <td>Feb 02, 18:40</td>
+            <td>Feb 06</td>
+          </tr>
+          <tr>
+            <td><strong>LR-11098</strong></td>
+            <td>#CNT-7811</td>
+            <td>FastMove Carriers</td>
+            <td>Katni → Delhi</td>
+            <td><span class="sb ok">Delivered</span></td>
+            <td>Feb 01, 16:10</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Date/time (local browser)
+  const now = new Date();
+  document.getElementById("sellerNow").textContent =
+    now.toLocaleString("en-IN", { weekday:"long", year:"numeric", month:"short", day:"2-digit", hour:"2-digit", minute:"2-digit" });
+
+  // Dummy seller analytics (replace with backend JSON later)
+  const SELLER_DUMMY = {
+    kpis: {
+      earnings: "₹6.82L",
+      earningsDelta: "11% vs last month",
+      activeDeals: 24,
+      negotiations: 9,
+      activeContracts: 18,
+      signedMTD: 7,
+      listings: 36,
+      brands: 5,
+      inTransit: 6,
+      avgTransit: "2.4 days",
+      issues: 3,
+      complaints: 2,
+      conversion: "34%",
+      ttc: "3.8 days",
+      topBrand: "Katni Gold",
+      topBrandShare: "29% of GTV"
+    },
+    ranges: {
+      "7D": { labels:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], earningsLakhs:[0.7,0.9,0.6,1.1,0.95,0.8,1.2], deals:[3,4,2,5,4,3,6] },
+      "1M": { labels:["W1","W2","W3","W4"], earningsLakhs:[1.4,1.8,1.6,2.0], deals:[10,12,11,14] },
+      "3M": { labels:["Nov","Dec","Jan"], earningsLakhs:[4.6,5.2,6.8], deals:[28,31,39] },
+      "1Y": { labels:["Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan"], earningsLakhs:[2.2,2.4,2.5,2.9,3.1,3.3,3.6,3.8,4.1,4.6,5.2,6.8], deals:[9,10,10,12,13,14,15,16,18,21,25,39] }
+    },
+    brands: { labels:["Katni Gold","Ratan Toor","Narmada Fresh","Prime Pulses","Organic Select"], gtvLakhs:[8.4,7.1,6.2,4.9,2.8] },
+    commodityMix: { labels:["Toor","Chana","Moong","Urad","Masoor","Others"], volumeQtl:[210,180,120,95,140,65] },
+    pipeline: { labels:["Enquiry","Negotiation","Deal Locked","Contract Signed","Dispatch","Delivered"], counts:[18,9,7,6,5,11] },
+    transport: { labels:["Pickup Due","In Transit","Delivered","Delayed"], counts:[3,6,9,1] }
+  };
+
+  // Mount KPIs
+  (function mountKPIs(){
+    const k = SELLER_DUMMY.kpis;
+    const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+
+    set("kpiEarnings", k.earnings);
+    set("kpiEarningsDelta", k.earningsDelta);
+    set("kpiActiveDeals", k.activeDeals);
+    set("kpiNegotiations", k.negotiations);
+    set("kpiActiveContracts", k.activeContracts);
+    set("kpiSignedMTD", k.signedMTD);
+    set("kpiListings", k.listings);
+    set("kpiBrands", k.brands);
+    set("kpiInTransit", k.inTransit);
+    set("kpiAvgTransit", k.avgTransit);
+    set("kpiIssues", k.issues);
+    set("kpiComplaints", k.complaints);
+    set("kpiConversion", k.conversion);
+    set("kpiTTC", k.ttc);
+    set("kpiTopBrand", k.topBrand);
+    set("kpiTopBrandShare", k.topBrandShare);
+  })();
+
+  // Charts
+  const makeChart = (ctx, cfg) => new Chart(ctx, cfg);
+
+  // Earnings & Deals Trend (line + bar)
+  let trendChart;
+  function initTrend(rangeKey="7D"){
+    const r = SELLER_DUMMY.ranges[rangeKey];
+    const ctx = document.getElementById("earningsDealsChart").getContext("2d");
+
+    trendChart = makeChart(ctx,{
+      type:"bar",
+      data:{
+        labels:r.labels,
+        datasets:[
+          {
+            type:"line",
+            label:"Earnings (₹ Lakhs)",
+            data:r.earningsLakhs,
+            borderColor:"#10b981",
+            backgroundColor:"rgba(16,185,129,.12)",
+            borderWidth:3,
+            tension:.35,
+            fill:true,
+            yAxisID:"y"
+          },
+          {
+            label:"Deals Closed",
+            data:r.deals,
+            backgroundColor:"rgba(59,130,246,.75)",
+            borderRadius:10,
+            borderSkipped:false,
+            yAxisID:"y1"
+          }
+        ]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:true,
+        plugins:{
+          legend:{ position:"top", labels:{ usePointStyle:true, padding:16, font:{ size:12, weight:"800" } } },
+          tooltip:{ backgroundColor:"#0f172a", padding:12 }
+        },
+        scales:{
+          y:{ beginAtZero:true, grid:{ color:"#e2e8f0" }, title:{ display:true, text:"₹ Lakhs" } },
+          y1:{ beginAtZero:true, position:"right", grid:{ display:false }, title:{ display:true, text:"Deals" } },
+          x:{ grid:{ display:false } }
+        }
+      }
+    });
+  }
+  initTrend("7D");
+
+  // Brand performance (horizontal bar)
+  makeChart(document.getElementById("brandPerformanceChart").getContext("2d"),{
+    type:"bar",
+    data:{
+      labels:SELLER_DUMMY.brands.labels,
+      datasets:[{
+        label:"GTV (₹ Lakhs)",
+        data:SELLER_DUMMY.brands.gtvLakhs,
+        backgroundColor:"rgba(139,92,246,.75)",
+        borderRadius:10,
+        borderSkipped:false
+      }]
+    },
+    options:{
+      indexAxis:"y",
+      responsive:true,
+      maintainAspectRatio:true,
+      plugins:{ legend:{ display:false }, tooltip:{ backgroundColor:"#0f172a", padding:12 } },
+      scales:{
+        x:{ beginAtZero:true, grid:{ color:"#e2e8f0" } },
+        y:{ grid:{ display:false } }
+      }
+    }
+  });
+
+  // Commodity mix (polar area)
+  makeChart(document.getElementById("commodityMixChart").getContext("2d"),{
+    type:"polarArea",
+    data:{
+      labels:SELLER_DUMMY.commodityMix.labels,
+      datasets:[{
+        data:SELLER_DUMMY.commodityMix.volumeQtl,
+        backgroundColor:[
+          "rgba(59,130,246,.75)",
+          "rgba(16,185,129,.75)",
+          "rgba(245,158,11,.75)",
+          "rgba(139,92,246,.75)",
+          "rgba(6,182,212,.75)",
+          "rgba(100,116,139,.65)"
+        ],
+        borderWidth:0
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:true,
+      plugins:{
+        legend:{ position:"bottom", labels:{ usePointStyle:true, padding:14, font:{ size:12, weight:"800" } } },
+        tooltip:{ backgroundColor:"#0f172a", padding:12 }
+      }
+    }
+  });
+
+  // Deal pipeline (doughnut)
+  makeChart(document.getElementById("dealPipelineChart").getContext("2d"),{
+    type:"doughnut",
+    data:{
+      labels:SELLER_DUMMY.pipeline.labels,
+      datasets:[{
+        data:SELLER_DUMMY.pipeline.counts,
+        backgroundColor:["#3b82f6","#06b6d4","#8b5cf6","#10b981","#f59e0b","#64748b"],
+        borderWidth:0
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:true,
+      plugins:{
+        legend:{ position:"bottom", labels:{ usePointStyle:true, padding:14, font:{ size:12, weight:"800" } } },
+        tooltip:{ backgroundColor:"#0f172a", padding:12 }
+      }
+    }
+  });
+
+  // Transport status (doughnut)
+  makeChart(document.getElementById("transportStatusChart").getContext("2d"),{
+    type:"doughnut",
+    data:{
+      labels:SELLER_DUMMY.transport.labels,
+      datasets:[{
+        data:SELLER_DUMMY.transport.counts,
+        backgroundColor:["#f59e0b","#3b82f6","#10b981","#ef4444"],
+        borderWidth:0
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:true,
+      plugins:{
+        legend:{ position:"bottom", labels:{ usePointStyle:true, padding:14, font:{ size:12, weight:"800" } } },
+        tooltip:{ backgroundColor:"#0f172a", padding:12 }
+      }
+    }
+  });
+
+  // Filter buttons
+  document.querySelectorAll("#trendFilters .fbtn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll("#trendFilters .fbtn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+
+      const range = btn.dataset.range;
+      const r = SELLER_DUMMY.ranges[range];
+      if(!r || !trendChart) return;
+
+      trendChart.data.labels = r.labels;
+      trendChart.data.datasets[0].data = r.earningsLakhs;
+      trendChart.data.datasets[1].data = r.deals;
+      trendChart.update();
+    });
+  });
+</script>
+{% endblock %}

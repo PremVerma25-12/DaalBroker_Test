@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}Offer Management{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <nav class="breadcrumb-custom" aria-label="breadcrumb">
+      <a href="/dashboard/">Dashboard</a>
+      <i class="separator fa fa-chevron-right"></i>
+      <a href="#">Product</a>
+      <i class="separator fa fa-chevron-right"></i>
+      <span class="active">Offer Management</span>
+  </nav>
+  <div class="d-flex justify-content-between align-items-center">
+      <h1 class="page-title">Offer Management</h1>
+  </div>
+</div>
+
+<div id="offerAlertBox"></div>
+{% csrf_token %}
+
+<div class="table-responsive card">
+    <table class="table table-custom" id="offersTable">
+        <thead>
+            <tr>
+                <th>Transaction ID</th>
+                <th>Product ID</th>
+                <th>Product</th>
+                <th>Base Amt</th>
+                <th>Seller Qty</th>
+                <th>Offered Amt</th>
+                <th>Req. Qty</th>
+                <th>Buyer Qty</th>
+                <th>Delivery Date</th>
+                <th>Buyer Remark</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="offersTableBody">
+            <tr><td colspan="12" class="text-center text-muted">Loading offers...</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const IS_SUPER_ADMIN = "{{ is_super_admin_user|yesno:'true,false' }}" === "true";
+const IS_SELLER = "{{ is_seller_user|yesno:'true,false' }}" === "true";
+const IS_BUYER = "{{ is_buyer_user|yesno:'true,false' }}" === "true";
+
+function getCsrfToken() {
+  return document.querySelector("[name=csrfmiddlewaretoken]")?.value || "";
+}
+
+function showOfferAlert(type, msg) {
+  document.getElementById("offerAlertBox").innerHTML = `<div class="alert alert-${type} alert-dismissible fade show">${msg}<button class="btn-close" data-bs-dismiss="alert"></button></div>`;
+}
+
+function statusBadge(status) {
+  const map = {
+    interested: '<span class="badge bg-info">Pending Seller</span>',
+    seller_confirmed: '<span class="badge bg-warning text-dark">Pending Super Admin</span>',
+    buyer_confirmed: '<span class="badge bg-primary">Buyer Confirmed</span>',
+    deal_confirmed: '<span class="badge bg-success">Approved</span>',
+    rejected: '<span class="badge bg-danger">Rejected</span>',
+    cancelled: '<span class="badge bg-secondary">Cancelled</span>',
+  };
+  return map[status] || `<span class="badge bg-secondary">${status || '-'}</span>`;
+}
+
+function offerWithArrow(offer, base, unit) {
+  if (!offer) return '-';
+  const offered = Number(offer);
+  const baseVal = Number(base);
+  let arrow = '';
+  if (offered > baseVal) arrow = '<span class="text-success fw-bold ms-1">↑</span>';
+  if (offered < baseVal) arrow = '<span class="text-danger fw-bold ms-1">↓</span>';
+  return `₹${offer}/${(unit || 'kg').toUpperCase()} ${arrow}`;
+}
+
+function actionButtons(row) {
+  const canSellerAction = (IS_SELLER || (!IS_SUPER_ADMIN && !IS_BUYER)) && row.status === 'interested';
+  const canSuperAction = IS_SUPER_ADMIN && row.status === 'seller_confirmed';
+  return `
+    <div class="d-flex gap-2">
+      ${canSellerAction ? `<button class="btn btn-sm btn-success offer-accept-btn" data-product-id="${row.product_id}" data-interest-id="${row.interest_id}">Accept</button>` : ''}
+      ${canSellerAction ? `<button class="btn btn-sm btn-outline-danger offer-reject-btn" data-product-id="${row.product_id}" data-interest-id="${row.interest_id}">Reject</button>` : ''}
+      ${canSuperAction ? `<button class="btn btn-sm btn-primary offer-final-approve-btn" data-product-id="${row.product_id}" data-interest-id="${row.interest_id}">Approve</button>` : ''}
+      ${canSuperAction ? `<button class="btn btn-sm btn-outline-danger offer-final-reject-btn" data-product-id="${row.product_id}" data-interest-id="${row.interest_id}">Reject</button>` : ''}
+      ${(!canSellerAction && !canSuperAction) ? '<span class="text-muted">View</span>' : ''}
+    </div>
+  `;
+}
+
+function renderRows(rows) {
+  const tbody = document.getElementById("offersTableBody");
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">No offers found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((row) => `
+    <tr id="offer-row-${row.interest_id}">
+      <td><small class="text-muted">${row.transaction_id || '-'}</small></td>
+      <td>P${row.product_id}</td>
+      <td>${row.product_title || '-'}</td>
+      <td>₹${row.amount}/${(row.amount_unit || 'kg').toUpperCase()}</td>
+      <td>₹${row.seller_snapshot_amount || '-'}/${(row.amount_unit || 'kg').toUpperCase()}</td>
+      <td>${offerWithArrow(row.buyer_offered_amount || row.offered_amount, row.amount, row.amount_unit)}</td>
+      <td>${row.buyer_required_quantity || '-'}</td>
+      <td>${row.seller_snapshot_quantity || '-'}</td>
+      <td>${row.delivery_date || '-'}</td>
+      <td><small class="text-muted">${row.buyer_remark || '-'}</small></td>
+      <td>${statusBadge(row.status)}</td>
+      <td>${actionButtons(row)}</td>
+    </tr>
+  `).join('');
+}
+
+function loadOffers() {
+  fetch('/api/offers/list/')
+    .then((r) => r.json())
+    .then((data) => {
+      if (!data.success) {
+        showOfferAlert('danger', data.message || 'Unable to load offers.');
+        return;
+      }
+      renderRows(data.results || []);
+    })
+    .catch(() => showOfferAlert('danger', 'Unable to load offers.'));
+}
+
+function sellerAction(productId, interestId, decision) {
+  const remark = window.prompt(`Optional ${decision} remark:`, '') || '';
+  const endpoint = decision === 'accept' ? `/api/products/${productId}/approve/` : `/api/products/${productId}/reject/`;
+  fetch(endpoint, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
+    body: JSON.stringify({interest_id: interestId, seller_remark: remark}),
+  })
+  .then((r) => r.json())
+  .then((data) => {
+    if (!data.success) {
+      showOfferAlert('danger', data.message || `Unable to ${decision} offer.`);
+      return;
+    }
+    showOfferAlert('success', data.message || `Offer ${decision}ed.`);
+    loadOffers();
+  })
+  .catch(() => showOfferAlert('danger', `Unable to ${decision} offer.`));
+}
+
+function superAdminAction(productId, interestId, decision) {
+  const remark = window.prompt(`Optional ${decision} remark:`, '') || '';
+  fetch(`/api/products/${productId}/confirm-deal/`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
+    body: JSON.stringify({interest_id: interestId, decision: decision, superadmin_remark: remark}),
+  })
+  .then((r) => r.json())
+  .then((data) => {
+    if (!data.success) {
+      showOfferAlert('danger', data.message || `Unable to ${decision} deal.`);
+      return;
+    }
+    showOfferAlert('success', data.message || `Deal ${decision}d.`);
+    loadOffers();
+  })
+  .catch(() => showOfferAlert('danger', `Unable to ${decision} deal.`));
+}
+
+document.addEventListener('click', function(e) {
+  const acceptBtn = e.target.closest('.offer-accept-btn');
+  if (acceptBtn) {
+    sellerAction(acceptBtn.dataset.productId, acceptBtn.dataset.interestId, 'accept');
+    return;
+  }
+  const rejectBtn = e.target.closest('.offer-reject-btn');
+  if (rejectBtn) {
+    sellerAction(rejectBtn.dataset.productId, rejectBtn.dataset.interestId, 'reject');
+    return;
+  }
+  const finalApproveBtn = e.target.closest('.offer-final-approve-btn');
+  if (finalApproveBtn) {
+    superAdminAction(finalApproveBtn.dataset.productId, finalApproveBtn.dataset.interestId, 'approve');
+    return;
+  }
+  const finalRejectBtn = e.target.closest('.offer-final-reject-btn');
+  if (finalRejectBtn) {
+    superAdminAction(finalRejectBtn.dataset.productId, finalRejectBtn.dataset.interestId, 'reject');
+  }
+});
+
+loadOffers();
+</script>
+{% endblock %}

@@ -1,0 +1,451 @@
+{% extends 'base.html' %}
+
+{% block title %}Sub-Category Master{% endblock %}
+
+{% block content %}
+
+
+<div class="page-header">
+  <!-- Breadcrumb -->
+  <nav class="breadcrumb-custom" aria-label="breadcrumb">
+      <a href="/dashboard/">Dashboard</a>
+      <i class="separator fa fa-chevron-right"></i>
+      <a href="#">Master</a>
+      <i class="separator fa fa-chevron-right"></i>
+      <span class="active">Subcategory Master</span>
+  </nav>
+  
+      <!-- Page Title -->
+      <div class="d-flex justify-content-between align-items-center">
+          <h1 class="page-title">Subcategory Master</h1>
+          <div class="d-flex gap-2">
+            {% if user.is_superuser or user.is_staff or user.is_admin or user.role == 'admin' or user.is_seller or user.role == 'seller' or user.role == 'both_sellerandbuyer' %}
+            <button type="button" class="btn btn-dal" data-bs-toggle="modal" data-bs-target="#createSubcategoryModal">
+                <i class="fas fa-plus"></i> Add Sub-Category
+            </button>
+          {% endif %}
+          </div>
+      </div>
+    </div>
+
+
+
+                <div id="subcategoryAlertBox"></div>
+                
+                <div class="table-responsive card">
+                    <table class="table table-custom" id="subcategoryTable">
+                        <thead>
+                            <tr>
+                                <th>Sub-Category Name</th>
+                                <th>Parent Category</th>
+                                <th>Created At</th>
+                                <th>Updated At</th>
+                                {% if user.is_superuser or user.is_staff or user.is_admin or user.role == 'admin' or user.is_seller or user.role == 'seller' or user.role == 'both_sellerandbuyer' %}
+                                <th>Actions</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for subcategory in subcategories %}
+                            <tr id="subcategory-row-{{ subcategory.id }}">
+                                <td>{{ subcategory.subcategory_name }}</td>
+                                <td>{{ subcategory.category.category_name }}</td>
+                                <td>{{ subcategory.created_at|date:"M d, Y h:i A" }}</td>
+                                <td>{{ subcategory.updated_at|date:"M d, Y h:i A" }}</td>
+                                <td>
+                                     {% if user.is_superuser or user.is_staff or user.is_admin or user.role == 'admin' or user.is_seller or user.role == 'seller' or user.role == 'both_sellerandbuyer' %}
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn-action btn-view view-subcategory" title="View" data-subcategory-id="{{ subcategory.id }}">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button type="button" class="btn-action btn-edit edit-subcategory" title="Edit" data-subcategory-id="{{ subcategory.id }}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button type="button" class="btn-action btn-delete delete-subcategory" title="Delete" data-subcategory-id="{{ subcategory.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center">No subcategories found. Click "Add Sub-Category" to create one.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% include "_pagination.html" %}
+            
+<!-- Create Sub-Category Modal -->
+<div class="modal fade" id="createSubcategoryModal" tabindex="-1" aria-labelledby="createSubcategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createSubcategoryModalLabel">Add New Sub-Category</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createSubcategoryForm">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="create_subcategory_name" class="form-label">Sub-Category Name *</label>
+                        <input type="text" class="form-control" id="create_subcategory_name" name="subcategory_name" required>
+                        <div class="invalid-feedback">Sub-category name is required.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="create_category_select" class="form-label">Parent Category *</label>
+                        <select class="form-select" id="create_category_select" name="category_id" required>
+                            <option value="">Select a category</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}">{{ category.category_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">Please select a category.</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveCreateSubcategory">Create Sub-Category</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Sub-Category Modal -->
+<div class="modal fade" id="viewSubcategoryModal" tabindex="-1" aria-labelledby="viewSubcategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewSubcategoryModalLabel">Sub-Category Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="view_subcategory_details">
+                    <div class="row">
+                        <div class="col-md-6"><strong>Sub-Category Name:</strong> <span id="view_subcategory_name"></span></div>
+                        <div class="col-md-6"><strong>Parent Category:</strong> <span id="view_parent_category"></span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6"><strong>Created At:</strong> <span id="view_subcat_created_at"></span></div>
+                        <div class="col-md-6"><strong>Updated At:</strong> <span id="view_subcat_updated_at"></span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Sub-Category Modal -->
+<div class="modal fade" id="editSubcategoryModal" tabindex="-1" aria-labelledby="editSubcategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editSubcategoryModalLabel">Edit Sub-Category</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editSubcategoryForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="edit_subcategory_id" name="subcategory_id">
+                    <div class="mb-3">
+                        <label for="edit_subcategory_name" class="form-label">Sub-Category Name *</label>
+                        <input type="text" class="form-control" id="edit_subcategory_name" name="subcategory_name" required>
+                        <div class="invalid-feedback">Sub-category name is required.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_category_select" class="form-label">Parent Category *</label>
+                        <select class="form-select" id="edit_category_select" name="category_id" required>
+                            <option value="">Select a category</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}">{{ category.category_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">Please select a category.</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveEditSubcategory">Update Sub-Category</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Sub-Category Modal -->
+<div class="modal fade" id="deleteSubcategoryModal" tabindex="-1" aria-labelledby="deleteSubcategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteSubcategoryModalLabel">Delete Sub-Category</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this sub-category?</p>
+                <div id="deleteSubcategoryInfo">
+                    <strong>Sub-Category Name:</strong> <span id="delete_subcategory_name"></span><br>
+                    <strong>Parent Category:</strong> <span id="delete_parent_category"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteSubcategory">Delete Sub-Category</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Sub-Category Master JavaScript
+const createSubcategoryModal = new bootstrap.Modal(document.getElementById('createSubcategoryModal'));
+const viewSubcategoryModal = new bootstrap.Modal(document.getElementById('viewSubcategoryModal'));
+const editSubcategoryModal = new bootstrap.Modal(document.getElementById('editSubcategoryModal'));
+const deleteSubcategoryModal = new bootstrap.Modal(document.getElementById('deleteSubcategoryModal'));
+let deleteSubcategoryId = null;
+
+// ===================== SUBCATEGORY ALERT =====================
+function showSubcategoryAlert(type, msg){
+    document.getElementById("subcategoryAlertBox").innerHTML = `
+        <div class="alert alert-${type} alert-dismissible fade show">
+            ${msg}
+            <button class="btn-close" data-bs-dismiss="alert"></button>
+        </div>`;
+}
+
+// ===================== EVENT DELEGATION =====================
+document.addEventListener("click", function(e){
+
+    // -------- VIEW SUBCATEGORY --------
+    if(e.target.classList.contains("view-subcategory") || e.target.closest(".view-subcategory")){
+        const button = e.target.classList.contains("view-subcategory") ? e.target : e.target.closest(".view-subcategory");
+        const id = button.dataset.subcategoryId;
+
+        fetch(`/api/subcategories/${id}/`)
+        .then(res => res.json())
+        .then(subcategory => {
+            if (subcategory.success === false) {
+                showSubcategoryAlert("danger", subcategory.message);
+                return;
+            }
+            document.getElementById("view_subcategory_name").textContent = subcategory.subcategory_name;
+            document.getElementById("view_parent_category").textContent = subcategory.category_name;
+            document.getElementById("view_subcat_created_at").textContent = subcategory.created_at;
+            document.getElementById("view_subcat_updated_at").textContent = subcategory.updated_at;
+            viewSubcategoryModal.show();
+        })
+        .catch(error => {
+            showSubcategoryAlert("danger", "Error loading subcategory details.");
+        });
+    }
+
+    // -------- EDIT SUBCATEGORY --------
+    if(e.target.classList.contains("edit-subcategory") || e.target.closest(".edit-subcategory")){
+        const button = e.target.classList.contains("edit-subcategory") ? e.target : e.target.closest(".edit-subcategory");
+        const id = button.dataset.subcategoryId;
+
+        fetch(`/api/subcategories/${id}/`)
+        .then(res => res.json())
+        .then(subcategory => {
+            if (subcategory.success === false) {
+                showSubcategoryAlert("danger", subcategory.message);
+                return;
+            }
+            document.getElementById("edit_subcategory_id").value = subcategory.id;
+            document.getElementById("edit_subcategory_name").value = subcategory.subcategory_name;
+            document.getElementById("edit_category_select").value = subcategory.category_id;
+            editSubcategoryModal.show();
+        })
+        .catch(error => {
+            showSubcategoryAlert("danger", "Error loading subcategory for editing.");
+        });
+    }
+
+    // -------- DELETE SUBCATEGORY --------
+    if(e.target.classList.contains("delete-subcategory") || e.target.closest(".delete-subcategory")){
+        const button = e.target.classList.contains("delete-subcategory") ? e.target : e.target.closest(".delete-subcategory");
+        deleteSubcategoryId = button.dataset.subcategoryId;
+        
+        fetch(`/api/subcategories/${deleteSubcategoryId}/`)
+        .then(res => res.json())
+        .then(subcategory => {
+            if (subcategory.success === false) {
+                showSubcategoryAlert("danger", subcategory.message);
+                return;
+            }
+            document.getElementById("delete_subcategory_name").textContent = subcategory.subcategory_name;
+            document.getElementById("delete_parent_category").textContent = subcategory.category_name;
+            deleteSubcategoryModal.show();
+        })
+        .catch(error => {
+            showSubcategoryAlert("danger", "Error loading subcategory for deletion.");
+        });
+    }
+});
+
+// ===================== CREATE SUBCATEGORY =====================
+document.getElementById("saveCreateSubcategory").onclick = function(){
+    const subcategoryData = {
+        subcategory_name: document.getElementById("create_subcategory_name").value.trim(),
+        category_id: document.getElementById("create_category_select").value
+    };
+
+    // Client-side validation
+    if (!subcategoryData.subcategory_name || !subcategoryData.category_id) {
+        showSubcategoryAlert("danger", "Sub-category name and category are required.");
+        return;
+    }
+
+    fetch('/api/subcategories/create/',{
+        method:"POST",
+        headers:{
+            "Content-Type":"application/json",
+            "X-CSRFToken":document.querySelector("[name=csrfmiddlewaretoken]").value
+        },
+        body:JSON.stringify(subcategoryData)
+    })
+    .then(res=>res.json())
+    .then(r=>{
+        if(r.success){
+            createSubcategoryModal.hide();
+            document.getElementById("createSubcategoryForm").reset();
+            showSubcategoryAlert("success", r.message);
+            
+            // Add new row to table
+            const tableBody = document.querySelector('#subcategoryTable tbody');
+            const newRow = document.createElement('tr');
+            newRow.id = `subcategory-row-${r.subcategory.id}`;
+            newRow.innerHTML = `
+                <td>${r.subcategory.subcategory_name}</td>
+                <td>${r.subcategory.category_name}</td>
+                <td>${r.subcategory.created_at}</td>
+                <td>${r.subcategory.updated_at}</td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-sm btn-outline-info view-subcategory" data-subcategory-id="${r.subcategory.id}">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary edit-subcategory" data-subcategory-id="${r.subcategory.id}">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger delete-subcategory" data-subcategory-id="${r.subcategory.id}">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </div>
+                </td>
+            `;
+            // Remove empty message if it exists
+            if (tableBody.querySelector('tr:first-child td[colspan]')) {
+                tableBody.innerHTML = '';
+            }
+            tableBody.appendChild(newRow);
+        }else{
+            showSubcategoryAlert("danger", r.message);
+        }
+    })
+    .catch(error => {
+        showSubcategoryAlert("danger", "Error creating subcategory.");
+    });
+};
+
+// ===================== UPDATE SUBCATEGORY =====================
+document.getElementById("saveEditSubcategory").onclick = function(){
+    const id = document.getElementById("edit_subcategory_id").value;
+    const subcategoryData = {
+        subcategory_name: document.getElementById("edit_subcategory_name").value.trim(),
+        category_id: document.getElementById("edit_category_select").value
+    };
+
+    // Client-side validation
+    if (!subcategoryData.subcategory_name || !subcategoryData.category_id) {
+        showSubcategoryAlert("danger", "Sub-category name and category are required.");
+        return;
+    }
+
+    fetch(`/api/subcategories/${id}/update/`,{
+        method:"POST",
+        headers:{
+            "Content-Type":"application/json",
+            "X-CSRFToken":document.querySelector("[name=csrfmiddlewaretoken]").value
+        },
+        body:JSON.stringify(subcategoryData)
+    })
+    .then(res=>res.json())
+    .then(r=>{
+        if(r.success){
+            editSubcategoryModal.hide();
+            showSubcategoryAlert("success", r.message);
+            
+            // Update row in table
+            const row = document.getElementById(`subcategory-row-${id}`);
+            row.innerHTML = `
+                <td>${r.subcategory.subcategory_name}</td>
+                <td>${r.subcategory.category_name}</td>
+                <td>${r.subcategory.created_at}</td>
+                <td>${r.subcategory.updated_at}</td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-sm btn-outline-info view-subcategory" data-subcategory-id="${r.subcategory.id}">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary edit-subcategory" data-subcategory-id="${r.subcategory.id}">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger delete-subcategory" data-subcategory-id="${r.subcategory.id}">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </div>
+                </td>
+            `;
+        }else{
+            showSubcategoryAlert("danger", r.message);
+        }
+    })
+    .catch(error => {
+        showSubcategoryAlert("danger", "Error updating subcategory.");
+    });
+};
+
+// ===================== DELETE SUBCATEGORY =====================
+document.getElementById("confirmDeleteSubcategory").onclick = function(){
+    fetch(`/api/subcategories/${deleteSubcategoryId}/delete/`,{
+        method:"POST",
+        headers:{
+            "X-CSRFToken":document.querySelector("[name=csrfmiddlewaretoken]").value
+        }
+    })
+    .then(res=>res.json())
+    .then(r=>{
+        if(r.success){
+            deleteSubcategoryModal.hide();
+            document.getElementById(`subcategory-row-${deleteSubcategoryId}`).remove();
+            showSubcategoryAlert("success", r.message);
+            
+            // Check if table is empty
+            const tableBody = document.querySelector('#subcategoryTable tbody');
+            if (tableBody.children.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5" class="text-center">No subcategories found. Click "Add Sub-Category" to create one.</td></tr>';
+            }
+        }else{
+            showSubcategoryAlert("danger", r.message);
+        }
+    })
+    .catch(error => {
+        showSubcategoryAlert("danger", "Error deleting subcategory.");
+    });
+};
+
+// ===================== SAFETY CLEANUP =====================
+document.addEventListener("hidden.bs.modal", function(){
+    document.body.classList.remove("modal-open");
+    document.querySelectorAll(".modal-backdrop").forEach(b=>b.remove());
+});
+</script>
+{% endblock %}

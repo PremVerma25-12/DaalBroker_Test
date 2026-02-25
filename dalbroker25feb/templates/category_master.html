@@ -1,0 +1,1103 @@
+{% extends 'base.html' %}
+
+{% block title %}Category Master{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <!-- Breadcrumb -->
+    <nav class="breadcrumb-custom" aria-label="breadcrumb">
+        <a href="/dashboard/">Dashboard</a>
+        <i class="separator fa fa-chevron-right"></i>
+        <a href="#">Master</a>
+        <i class="separator fa fa-chevron-right"></i>
+        <span class="active">Category Master</span>
+    </nav>
+    
+    <!-- Page Title -->
+    <div class="d-flex justify-content-between align-items-center">
+        <h1 class="page-title">Category Master</h1>
+
+        <div class="d-flex gap-2">
+            {% if user.is_superuser or user.is_staff or user.is_admin or user.role == 'admin' or user.is_seller or user.role == 'seller' or user.role == 'both_sellerandbuyer' %}
+            <button type="button" class="btn btn-dal" data-bs-toggle="modal" data-bs-target="#createCategoryModal">
+                <i class="fas fa-plus"></i> Add Category
+            </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div id="categoryAlertBox"></div>
+
+<!-- Filter Section -->
+<div class="card p-3 mb-3">
+    <form method="get" class="row g-3">
+        <div class="col-md-3">
+            <input type="text" name="search" class="form-control" placeholder="Search by name..." value="{{ request.GET.search|default:'' }}">
+        </div>
+        <div class="col-md-3">
+            <select name="level" class="form-select">
+                <option value="">All Levels</option>
+                <option value="0" {% if request.GET.level == '0' %}selected{% endif %}>Level 0 (Root)</option>
+                <option value="1" {% if request.GET.level == '1' %}selected{% endif %}>Level 1</option>
+                <option value="2" {% if request.GET.level == '2' %}selected{% endif %}>Level 2</option>
+                <option value="3" {% if request.GET.level == '3' %}selected{% endif %}>Level 3</option>
+                <option value="4" {% if request.GET.level == '4' %}selected{% endif %}>Level 4</option>
+                <option value="5" {% if request.GET.level == '5' %}selected{% endif %}>Level 5</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select name="parent" class="form-select">
+                <option value="">All Categories</option>
+                <option value="root" {% if request.GET.parent == 'root' %}selected{% endif %}>Root Categories Only</option>
+                {% for cat in all_categories %}
+                <option value="{{ cat.id }}" {% if request.GET.parent == cat.id|stringformat:"s" %}selected{% endif %}>
+                    {{ cat.get_full_path }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select name="status" class="form-select">
+                <option value="">All Status</option>
+                <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
+                <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inactive</option>
+            </select>
+        </div>
+        <div class="col-12">
+            <button type="submit" class="btn btn-primary">Apply Filters</button>
+            <a href="{% url 'category_list' %}" class="btn btn-outline-secondary">Reset</a>
+        </div>
+    </form>
+</div>
+
+<!-- Category Tree View Toggle -->
+<div class="mb-3">
+    <div class="btn-group" role="group">
+        <button type="button" class="btn btn-outline-primary active" id="tableViewBtn">
+            <i class="fas fa-table"></i> Table View
+        </button>
+        <button type="button" class="btn btn-outline-primary" id="treeViewBtn">
+            <i class="fas fa-tree"></i> Tree View
+        </button>
+    </div>
+</div>
+
+<!-- Table View -->
+<div id="tableView" class="table-responsive card">
+    <table class="table table-custom" id="categoryTable">
+        <thead>
+            <tr>
+                <th>Category Name</th>
+                <th>Parent Category</th>
+                <th>Level</th>
+                <th>Full Path</th>
+                <th>Children Count</th>
+                <th>Status</th>
+                <th>Created At</th>
+                <th>Updated At</th>
+                {% if user.is_superuser or user.is_staff or user.is_admin or user.role == 'admin' or user.is_seller or user.role == 'seller' or user.role == 'both_sellerandbuyer' %}
+                <th>Actions</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for category in categories %}
+            <tr id="category-row-{{ category.id }}" class="level-{{ category.level }}">
+                <td>
+                    <span style="margin-left: {{ category.level|add:'0'|stringformat:'s' }}em;">
+                        {% if category.level > 0 %}└─{% endif %}
+                        {{ category.category_name }}
+                    </span>
+                </td>
+                <td>{{ category.parent.category_name|default:"-" }}</td>
+                <td>
+                    <span class="badge bg-info">Level {{ category.level }}</span>
+                </td>
+                <td>
+                    <small class="text-muted">{{ category.full_path|default:category.get_full_path }}</small>
+                </td>
+                <td>
+                    <span class="badge bg-secondary">{{ category.children_count }}</span>
+                </td>
+                <td>
+                    {% if category.is_active %}
+                    <span class="badge bg-success">Active</span>
+                    {% else %}
+                    <span class="badge bg-danger">Inactive</span>
+                    {% endif %}
+                </td>
+                <td>{{ category.created_at|date:"M d, Y h:i A" }}</td>
+                <td>{{ category.updated_at|date:"M d, Y h:i A" }}</td>
+                {% if user.is_superuser or user.is_staff or user.is_admin or user.role == 'admin' or user.is_seller or user.role == 'seller' or user.role == 'both_sellerandbuyer' %}
+                <td>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn-action btn-view view-category" title="View" data-category-id="{{ category.id }}">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button type="button" class="btn-action btn-edit edit-category" title="Edit" data-category-id="{{ category.id }}">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button type="button" class="btn-action btn-delete delete-category" title="Delete" data-category-id="{{ category.id }}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+                {% endif %}
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9" class="text-center">No categories found. Click "Add Category" to create one.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Tree View -->
+<div id="treeView" style="display: none;">
+    <div class="card">
+        <div class="card-body">
+            <div id="categoryTree" class="category-tree">
+                <!-- Tree will be loaded dynamically -->
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include "_pagination.html" %}
+
+<!-- Create Category Modal -->
+<div class="modal fade" id="createCategoryModal" tabindex="-1" aria-labelledby="createCategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createCategoryModalLabel">Add New Category</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createCategoryForm">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="create_category_name" class="form-label">Category Name *</label>
+                                <input type="text" class="form-control" id="create_category_name" name="category_name" required maxlength="100">
+                                <div class="invalid-feedback">Category name is required.</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="create_parent_category" class="form-label">Parent Category</label>
+                                <select class="form-control select2-category" id="create_parent_category" name="parent_id">
+                                    <option value="">None (Root Category)</option>
+                                </select>
+                                <small class="form-text text-muted">Select a parent category to create a subcategory, or leave blank for root level.</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div id="create_full_path_display" class="text-muted small"></div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="create_is_active" name="is_active" checked>
+                            <label class="form-check-label" for="create_is_active">
+                                Active
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <div id="createCategoryFeedback" class="w-100"></div>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveCreateCategory">Create Category</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Category Modal -->
+<div class="modal fade" id="viewCategoryModal" tabindex="-1" aria-labelledby="viewCategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewCategoryModalLabel">Category Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="view_category_details">
+                    <div class="row">
+                        <div class="col-md-6"><strong>Category Name:</strong> <span id="view_category_name"></span></div>
+                        <div class="col-md-6"><strong>Level:</strong> <span id="view_level" class="badge bg-info"></span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6"><strong>Parent Category:</strong> <span id="view_parent_name"></span></div>
+                        <div class="col-md-6"><strong>Status:</strong> <span id="view_is_active" class="badge"></span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6"><strong>Children Count:</strong> <span id="view_children_count" class="badge bg-secondary"></span></div>
+                        <div class="col-md-6"><strong>Path:</strong> <span id="view_path"></span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-12"><strong>Full Path:</strong> <span id="view_full_path" class="text-muted"></span></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6"><strong>Created At:</strong> <span id="view_created_at"></span></div>
+                        <div class="col-md-6"><strong>Updated At:</strong> <span id="view_updated_at"></span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Category Modal -->
+<div class="modal fade" id="editCategoryModal" tabindex="-1" aria-labelledby="editCategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editCategoryModalLabel">Edit Category</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editCategoryForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="edit_category_id" name="category_id">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_category_name" class="form-label">Category Name *</label>
+                                <input type="text" class="form-control" id="edit_category_name" name="category_name" required maxlength="100">
+                                <div class="invalid-feedback">Category name is required.</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_parent_category" class="form-label">Parent Category</label>
+                                <select class="form-control select2-category" id="edit_parent_category" name="parent_id">
+                                    <option value="">None (Root Category)</option>
+                                </select>
+                                <small class="form-text text-muted">Select a parent category to create a subcategory, or leave blank for root level.</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div id="edit_full_path_display" class="text-muted small"></div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="edit_is_active" name="is_active">
+                            <label class="form-check-label" for="edit_is_active">
+                                Active
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveEditCategory">Update Category</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Category Modal -->
+<div class="modal fade" id="deleteCategoryModal" tabindex="-1" aria-labelledby="deleteCategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteCategoryModalLabel">Delete Category</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this category?</p>
+                <div id="deleteCategoryInfo">
+                    <strong>Category Name:</strong> <span id="delete_category_name"></span><br>
+                    <strong>Children Count:</strong> <span id="delete_children_count">0</span>
+                </div>
+                {% verbatim %}
+                <div id="deleteWarning" class="alert alert-warning mt-3" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    This category has subcategories. Deleting it will also delete all subcategories. This action cannot be undone.
+                </div>
+                {% endverbatim %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteCategory">Delete Category</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.category-tree {
+    max-height: 600px;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.tree-node {
+    margin: 5px 0;
+    padding: 5px 10px;
+    border-left: 2px solid #dee2e6;
+    transition: all 0.2s;
+}
+
+.tree-node:hover {
+    border-left-color: #0d6efd;
+    background-color: #f8f9fa;
+}
+
+.tree-node .node-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tree-node .toggle-icon {
+    cursor: pointer;
+    width: 20px;
+    text-align: center;
+    color: #6c757d;
+}
+
+.tree-node .node-name {
+    font-weight: 500;
+}
+
+.tree-node .node-badge {
+    font-size: 0.75rem;
+    padding: 2px 6px;
+}
+
+.tree-node .node-children {
+    margin-left: 20px;
+    display: none;
+}
+
+.tree-node.expanded > .node-children {
+    display: block;
+}
+
+.level-0 { background-color: rgba(13, 110, 253, 0.05); }
+.level-1 { background-color: rgba(25, 135, 84, 0.05); }
+.level-2 { background-color: rgba(255, 193, 7, 0.05); }
+.level-3 { background-color: rgba(220, 53, 69, 0.05); }
+.level-4 { background-color: rgba(111, 66, 193, 0.05); }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Category Master JavaScript - Updated for Hierarchical Support
+const createCategoryModal = new bootstrap.Modal(document.getElementById('createCategoryModal'));
+const viewCategoryModal = new bootstrap.Modal(document.getElementById('viewCategoryModal'));
+const editCategoryModal = new bootstrap.Modal(document.getElementById('editCategoryModal'));
+const deleteCategoryModal = new bootstrap.Modal(document.getElementById('deleteCategoryModal'));
+let deleteCategoryId = null;
+
+// ===================== UTILITY FUNCTIONS =====================
+function getCsrfToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
+
+function showCategoryAlert(type, msg) {
+    document.getElementById("categoryAlertBox").innerHTML = `
+        <div class="alert alert-${type} alert-dismissible fade show">
+            ${msg}
+            <button class="btn-close" data-bs-dismiss="alert"></button>
+        </div>`;
+}
+
+function showCreateCategoryFeedback(type, msg) {
+    const box = document.getElementById('createCategoryFeedback');
+    if (!box) return;
+    box.innerHTML = `
+        <div class="alert alert-${type} py-2 mb-0" role="alert">${msg}</div>
+    `;
+}
+
+// ===================== LOAD ALL CATEGORIES FOR TABLE =====================
+function loadAllCategories() {
+    const tableBody = document.querySelector('#categoryTable tbody');
+    if (!tableBody) return;
+    
+    // Show loading spinner
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="9" class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </td>
+        </tr>
+    `;
+    
+    // Use the existing list endpoint
+    fetch('/api/categories/?format=json')
+        .then(res => {
+            if (!res.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return res.json();
+        })
+        .then(data => {
+            // Handle both paginated and non-paginated responses
+            const categories = data.results || data;
+            
+            if (categories && categories.length > 0) {
+                // Sort categories by level and name for better display
+                categories.sort((a, b) => {
+                    if (a.level !== b.level) return a.level - b.level;
+                    return (a.category_name || a.name || '').localeCompare(b.category_name || b.name || '');
+                });
+                
+                let html = '';
+                categories.forEach(cat => {
+                    // Create indentation based on level
+                    const indent = '— '.repeat(cat.level || 0);
+                    const parentName = cat.parent_name || '-';
+                    const statusClass = cat.is_active ? 'bg-success' : 'bg-danger';
+                    const statusText = cat.is_active ? 'Active' : 'Inactive';
+                    const createdDate = cat.created_at ? new Date(cat.created_at).toLocaleString() : '-';
+                    const updatedDate = cat.updated_at ? new Date(cat.updated_at).toLocaleString() : '-';
+                    
+                    html += `
+                        <tr id="category-row-${cat.id}" class="level-${cat.level || 0}">
+                            <td>
+                                <span style="margin-left: ${(cat.level || 0) * 20}px; display: inline-block;">
+                                    ${indent}${cat.category_name || cat.name || ''}
+                                </span>
+                            </td>
+                            <td>${parentName}</td>
+                            <td>
+                                <span class="badge bg-info">Level ${cat.level || 0}</span>
+                            </td>
+                            <td>
+                                <small class="text-muted">${cat.full_path || cat.category_name || cat.name || ''}</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">${cat.children_count || 0}</span>
+                            </td>
+                            <td>
+                                <span class="badge ${statusClass}">${statusText}</span>
+                            </td>
+                            <td>${createdDate}</td>
+                            <td>${updatedDate}</td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn-action btn-view view-category" title="View" data-category-id="${cat.id}">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button type="button" class="btn-action btn-edit edit-category" title="Edit" data-category-id="${cat.id}">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button type="button" class="btn-action btn-delete delete-category" title="Delete" data-category-id="${cat.id}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                tableBody.innerHTML = html;
+            } else {
+                tableBody.innerHTML = '<tr><td colspan="9" class="text-center">No categories found. Click "Add Category" to create one.</td></tr>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading categories:', error);
+            tableBody.innerHTML = '<tr><td colspan="9" class="text-danger text-center">Error loading categories. Please refresh the page.</td></tr>';
+        });
+}
+
+// ===================== LOAD PARENT CATEGORIES =====================
+function loadParentCategories(selectedId = null, excludeId = null) {
+    return fetch('/api/categories/?active_only=true&format=json')
+        .then(res => {
+            if (!res.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return res.json();
+        })
+        .then(data => {
+            // Handle both paginated and non-paginated responses
+            const categories = data.results || data;
+            
+            const createSelect = document.getElementById('create_parent_category');
+            const editSelect = document.getElementById('edit_parent_category');
+            
+            if (createSelect) {
+                createSelect.innerHTML = '<option value="">None (Root Category)</option>';
+            }
+            if (editSelect) {
+                editSelect.innerHTML = '<option value="">None (Root Category)</option>';
+            }
+            
+            if (categories && categories.length > 0) {
+                // Sort categories by level and name for better display
+                categories.sort((a, b) => {
+                    if (a.level !== b.level) return a.level - b.level;
+                    return (a.category_name || a.name || '').localeCompare(b.category_name || b.name || '');
+                });
+                
+                categories.forEach(category => {
+                    if (excludeId && category.id == excludeId) return;
+                    
+                    const indent = '— '.repeat(category.level || 0);
+                    const label = indent + (category.category_name || category.name || '');
+                    
+                    if (createSelect) {
+                        const option = new Option(label, category.id);
+                        createSelect.add(option);
+                    }
+                    if (editSelect) {
+                        const option = new Option(label, category.id);
+                        editSelect.add(option);
+                    }
+                });
+            }
+            
+            // Set selected value if provided
+            if (selectedId) {
+                if (createSelect && createSelect.querySelector(`option[value="${selectedId}"]`)) {
+                    createSelect.value = selectedId;
+                }
+                if (editSelect && editSelect.querySelector(`option[value="${selectedId}"]`)) {
+                    editSelect.value = selectedId;
+                }
+            }
+            
+            return data;
+        })
+        .catch(error => {
+            console.error('Error loading parent categories:', error);
+        });
+}
+
+// ===================== LOAD CATEGORY TREE =====================
+function loadCategoryTree() {
+    const treeContainer = document.getElementById('categoryTree');
+    
+    // Show loading spinner
+    treeContainer.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    `;
+    
+    fetch('/api/categories/hierarchy/')
+        .then(res => {
+            if (!res.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return res.json();
+        })
+        .then(data => {
+            if (!data || data.length === 0) {
+                treeContainer.innerHTML = '<p class="text-center text-muted py-4">No categories found.</p>';
+                return;
+            }
+            
+            treeContainer.innerHTML = renderTreeNodes(data);
+            attachTreeEventListeners();
+        })
+        .catch(error => {
+            console.error('Error loading category tree:', error);
+            treeContainer.innerHTML = '<p class="text-danger text-center py-4">Error loading category tree.</p>';
+        });
+}
+
+function renderTreeNodes(nodes, level = 0) {
+    if (!nodes || nodes.length === 0) return '';
+    
+    let html = '';
+    nodes.forEach(node => {
+        const hasChildren = node.children && node.children.length > 0;
+        html += `
+            <div class="tree-node level-${node.level}" data-id="${node.id}">
+                <div class="node-content">
+                    <span class="toggle-icon ${hasChildren ? 'has-children' : ''}">
+                        ${hasChildren ? '<i class="fas fa-chevron-right"></i>' : '<i class="fas fa-circle" style="font-size: 6px; vertical-align: middle;"></i>'}
+                    </span>
+                    <span class="node-name">${node.name || node.category_name || ''}</span>
+                    <span class="badge bg-info node-badge">Level ${node.level}</span>
+                    ${node.is_active ? 
+                        '<span class="badge bg-success node-badge">Active</span>' : 
+                        '<span class="badge bg-danger node-badge">Inactive</span>'}
+                    <div class="node-actions ms-auto">
+                        <button class="btn btn-sm btn-outline-primary view-tree-node" title="View" data-id="${node.id}">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary edit-tree-node" title="Edit" data-id="${node.id}">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                </div>
+                ${hasChildren ? `<div class="node-children">${renderTreeNodes(node.children, level + 1)}</div>` : ''}
+            </div>
+        `;
+    });
+    return html;
+}
+
+function attachTreeEventListeners() {
+    document.querySelectorAll('.tree-node .toggle-icon.has-children').forEach(icon => {
+        icon.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const node = this.closest('.tree-node');
+            node.classList.toggle('expanded');
+            const chevron = this.querySelector('i');
+            if (chevron) {
+                if (chevron.classList.contains('fa-chevron-right')) {
+                    chevron.classList.remove('fa-chevron-right');
+                    chevron.classList.add('fa-chevron-down');
+                } else {
+                    chevron.classList.remove('fa-chevron-down');
+                    chevron.classList.add('fa-chevron-right');
+                }
+            }
+        });
+    });
+    
+    document.querySelectorAll('.view-tree-node').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const id = this.dataset.id;
+            viewCategory(id);
+        });
+    });
+    
+    document.querySelectorAll('.edit-tree-node').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const id = this.dataset.id;
+            editCategory(id);
+        });
+    });
+}
+
+// ===================== VIEW TOGGLE =====================
+document.getElementById('tableViewBtn').addEventListener('click', function() {
+    this.classList.add('active');
+    document.getElementById('treeViewBtn').classList.remove('active');
+    document.getElementById('tableView').style.display = 'block';
+    document.getElementById('treeView').style.display = 'none';
+});
+
+document.getElementById('treeViewBtn').addEventListener('click', function() {
+    this.classList.add('active');
+    document.getElementById('tableViewBtn').classList.remove('active');
+    document.getElementById('tableView').style.display = 'none';
+    document.getElementById('treeView').style.display = 'block';
+    loadCategoryTree();
+});
+
+// ===================== VIEW CATEGORY =====================
+function viewCategory(id) {
+    fetch(`/api/categories/${id}/`)
+        .then(async res => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.success === false) {
+                throw new Error(data.message || 'Error loading category details.');
+            }
+            return data;
+        })
+        .then(category => {
+            document.getElementById("view_category_name").textContent = category.category_name || '-';
+            document.getElementById("view_level").textContent = `Level ${category.level || 0}`;
+            document.getElementById("view_parent_name").textContent = category.parent_name || '-';
+            
+            const statusBadge = document.getElementById("view_is_active");
+            statusBadge.textContent = category.is_active ? 'Active' : 'Inactive';
+            statusBadge.className = `badge ${category.is_active ? 'bg-success' : 'bg-danger'}`;
+            
+            document.getElementById("view_children_count").textContent = category.children_count || 0;
+            document.getElementById("view_path").textContent = category.path || '-';
+            document.getElementById("view_full_path").textContent = category.full_path || category.category_name || '-';
+            
+            const createdDate = category.created_at ? new Date(category.created_at).toLocaleString() : '-';
+            const updatedDate = category.updated_at ? new Date(category.updated_at).toLocaleString() : '-';
+            
+            document.getElementById("view_created_at").textContent = createdDate;
+            document.getElementById("view_updated_at").textContent = updatedDate;
+            
+            viewCategoryModal.show();
+        })
+        .catch(error => {
+            console.error('Error loading category details:', error);
+            showCategoryAlert("danger", error.message || "Error loading category details.");
+        });
+}
+
+// ===================== EDIT CATEGORY =====================
+function editCategory(id) {
+    fetch(`/api/categories/${id}/`)
+        .then(async res => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.success === false) {
+                throw new Error(data.message || 'Error loading category for editing.');
+            }
+            return data;
+        })
+        .then(category => {
+            document.getElementById("edit_category_id").value = category.id;
+            document.getElementById("edit_category_name").value = category.category_name || '';
+            document.getElementById("edit_is_active").checked = category.is_active;
+            
+            // Load parent categories and set current parent
+            return loadParentCategories(category.parent, category.id).then(() => {
+                const editParentSelect = document.getElementById("edit_parent_category");
+                if (editParentSelect && category.parent) {
+                    editParentSelect.value = category.parent;
+                }
+                
+                // Update full path display
+                const pathDisplay = document.getElementById('edit_full_path_display');
+                if (category.full_path) {
+                    pathDisplay.textContent = `Full Path: ${category.full_path}`;
+                } else {
+                    pathDisplay.textContent = '';
+                }
+            });
+        })
+        .then(() => {
+            editCategoryModal.show();
+        })
+        .catch(error => {
+            console.error('Error loading category for editing:', error);
+            showCategoryAlert("danger", error.message || "Error loading category for editing.");
+        });
+}
+
+// ===================== EVENT DELEGATION =====================
+document.addEventListener("click", function(e) {
+    const setDeleteModalData = (name, childrenCount) => {
+        document.getElementById("delete_category_name").textContent = name || '-';
+        document.getElementById("delete_children_count").textContent = childrenCount || 0;
+
+        const warningDiv = document.getElementById('deleteWarning');
+        warningDiv.style.display = childrenCount > 0 ? 'block' : 'none';
+    };
+
+    // View Category
+    if (e.target.closest(".view-category")) {
+        const button = e.target.closest(".view-category");
+        viewCategory(button.dataset.categoryId);
+    }
+    
+    // Edit Category
+    if (e.target.closest(".edit-category")) {
+        const button = e.target.closest(".edit-category");
+        editCategory(button.dataset.categoryId);
+    }
+    
+    // Delete Category
+    if (e.target.closest(".delete-category")) {
+        const button = e.target.closest(".delete-category");
+        deleteCategoryId = button.dataset.categoryId;
+
+        if (!deleteCategoryId || deleteCategoryId === 'undefined' || deleteCategoryId === 'null') {
+            showCategoryAlert("danger", "Invalid category id. Please refresh the page.");
+            return;
+        }
+
+        const row = button.closest("tr");
+        const fallbackName = row?.querySelector("td:nth-child(1)")?.innerText?.trim() || '-';
+        const fallbackChildrenText = row?.querySelector("td:nth-child(5)")?.innerText || '0';
+        const fallbackChildrenCount = parseInt(String(fallbackChildrenText).replace(/[^\d]/g, ''), 10) || 0;
+
+        setDeleteModalData(fallbackName, fallbackChildrenCount);
+        deleteCategoryModal.show();
+
+        fetch(`/api/categories/${deleteCategoryId}/`)
+            .then(async res => {
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.success === false) {
+                    throw new Error(data.message || 'Error loading category for deletion.');
+                }
+                return data;
+            })
+            .then(category => {
+                setDeleteModalData(
+                    category.category_name || fallbackName,
+                    Number(category.children_count ?? fallbackChildrenCount) || 0
+                );
+            })
+            .catch(error => {
+                console.error('Error loading category for deletion:', error);
+                // Keep modal usable with fallback row data even when details API fails.
+            });
+    }
+});
+
+// ===================== CREATE CATEGORY =====================
+document.getElementById("saveCreateCategory").onclick = function() {
+    const saveBtn = this;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creating...';
+    
+    const categoryData = {
+        category_name: document.getElementById("create_category_name").value.trim(),
+        parent: document.getElementById("create_parent_category").value || null,
+        parent_id: document.getElementById("create_parent_category").value || null,
+        is_active: document.getElementById("create_is_active").checked
+    };
+
+    // Client-side validation
+    if (!categoryData.category_name) {
+        showCategoryAlert("danger", "Category name is required.");
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Create Category';
+        return;
+    }
+
+    fetch('/api/categories/', {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCsrfToken()
+        },
+        body: JSON.stringify(categoryData)
+    })
+    .then(res => {
+        if (!res.ok) {
+            return res.json().then(err => Promise.reject(err));
+        }
+        return res.json();
+    })
+    .then(r => {
+        if (r.id) {
+            createCategoryModal.hide();
+            document.getElementById("createCategoryForm").reset();
+            document.getElementById('create_full_path_display').textContent = '';
+            showCategoryAlert("success", "Category created successfully!");
+            
+            // Reload categories without page refresh
+            loadAllCategories();
+            loadParentCategories();
+            
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = 'Create Category';
+        } else {
+            const errorMsg = r.category_name ? r.category_name.join(', ') : (r.message || 'Error creating category');
+            showCategoryAlert("danger", errorMsg);
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = 'Create Category';
+        }
+    })
+    .catch(error => {
+        console.error('Error creating category:', error);
+        const errorMsg = error.category_name ? error.category_name.join(', ') : (error.message || 'Error creating category');
+        showCategoryAlert("danger", errorMsg);
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Create Category';
+    });
+};
+
+// ===================== UPDATE CATEGORY =====================
+document.getElementById("saveEditCategory").onclick = function() {
+    const saveBtn = this;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Updating...';
+    
+    const id = document.getElementById("edit_category_id").value;
+    const categoryData = {
+        category_name: document.getElementById("edit_category_name").value.trim(),
+        parent: document.getElementById("edit_parent_category").value || null,
+        parent_id: document.getElementById("edit_parent_category").value || null,
+        is_active: document.getElementById("edit_is_active").checked
+    };
+
+    // Client-side validation
+    if (!categoryData.category_name) {
+        showCategoryAlert("danger", "Category name is required.");
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Update Category';
+        return;
+    }
+
+    fetch(`/api/categories/${id}/`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCsrfToken()
+        },
+        body: JSON.stringify(categoryData)
+    })
+    .then(res => {
+        if (!res.ok) {
+            return res.json().then(err => Promise.reject(err));
+        }
+        return res.json();
+    })
+    .then(r => {
+        if (r.id) {
+            editCategoryModal.hide();
+            showCategoryAlert("success", "Category updated successfully!");
+            
+            // Reload categories without page refresh
+            loadAllCategories();
+            loadParentCategories();
+            
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = 'Update Category';
+        } else {
+            const errorMsg = r.category_name ? r.category_name.join(', ') : (r.message || 'Error updating category');
+            showCategoryAlert("danger", errorMsg);
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = 'Update Category';
+        }
+    })
+    .catch(error => {
+        console.error('Error updating category:', error);
+        const errorMsg = error.category_name ? error.category_name.join(', ') : (error.message || 'Error updating category');
+        showCategoryAlert("danger", errorMsg);
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Update Category';
+    });
+};
+
+// ===================== DELETE CATEGORY =====================
+document.getElementById("confirmDeleteCategory").onclick = function() {
+    const deleteBtn = this;
+    deleteBtn.disabled = true;
+    deleteBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Deleting...';
+    
+    fetch(`/api/categories/${deleteCategoryId}/`, {
+        method: "DELETE",
+        headers: {
+            "X-CSRFToken": getCsrfToken()
+        }
+    })
+    .then(res => {
+        if (res.status === 204) {
+            deleteCategoryModal.hide();
+            showCategoryAlert("success", "Category deleted successfully!");
+            
+            // Reload categories without page refresh
+            loadAllCategories();
+            loadParentCategories();
+            
+            deleteBtn.disabled = false;
+            deleteBtn.innerHTML = 'Delete Category';
+        } else {
+            return res.json().then(err => {
+                throw new Error(err.message || 'Error deleting category');
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Error deleting category:', error);
+        showCategoryAlert("danger", error.message || 'Error deleting category');
+        deleteBtn.disabled = false;
+        deleteBtn.innerHTML = 'Delete Category';
+    });
+};
+
+// ===================== UPDATE PATH DISPLAY =====================
+document.getElementById('create_parent_category')?.addEventListener('change', function() {
+    const parentId = this.value;
+    const pathDisplay = document.getElementById('create_full_path_display');
+    
+    if (parentId) {
+        fetch(`/api/categories/${parentId}/`)
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return res.json();
+            })
+            .then(category => {
+                pathDisplay.textContent = `Will be under: ${category.full_path || category.category_name || ''}`;
+            })
+            .catch(() => {
+                pathDisplay.textContent = '';
+            });
+    } else {
+        pathDisplay.textContent = 'Root category';
+    }
+});
+
+document.getElementById('edit_parent_category')?.addEventListener('change', function() {
+    const parentId = this.value;
+    const pathDisplay = document.getElementById('edit_full_path_display');
+    
+    if (parentId) {
+        fetch(`/api/categories/${parentId}/`)
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return res.json();
+            })
+            .then(category => {
+                pathDisplay.textContent = `Will be under: ${category.full_path || category.category_name || ''}`;
+            })
+            .catch(() => {
+                pathDisplay.textContent = '';
+            });
+    } else {
+        pathDisplay.textContent = 'Root category';
+    }
+});
+
+// ===================== ADD INDENTATION FUNCTION (for product pages) =====================
+function addIndentationToCategoryDropdowns() {
+    const createSelect = document.getElementById('create_category');
+    const editSelect = document.getElementById('edit_category');
+    
+    if (createSelect) {
+        for (let i = 1; i < createSelect.options.length; i++) {
+            const option = createSelect.options[i];
+            const level = parseInt(option.getAttribute('data-level') || '0');
+            const indent = '— '.repeat(level);
+            option.text = indent + option.text.replace(/— /g, '');
+        }
+    }
+    
+    if (editSelect) {
+        for (let i = 1; i < editSelect.options.length; i++) {
+            const option = editSelect.options[i];
+            const level = parseInt(option.getAttribute('data-level') || '0');
+            const indent = '— '.repeat(level);
+            option.text = indent + option.text.replace(/— /g, '');
+        }
+    }
+}
+
+// ===================== INITIALIZATION =====================
+document.addEventListener('DOMContentLoaded', function() {
+    // Load all categories for table display
+    loadAllCategories();
+    
+    // Load parent categories for dropdowns
+    loadParentCategories();
+    
+    // Add indentation to any category dropdowns if they exist
+    setTimeout(function() {
+        addIndentationToCategoryDropdowns();
+    }, 500);
+});
+
+// ===================== MODAL CLEANUP =====================
+document.addEventListener("hidden.bs.modal", function() {
+    document.body.classList.remove("modal-open");
+    document.querySelectorAll(".modal-backdrop").forEach(b => b.remove());
+});
+</script>
+{% endblock %}

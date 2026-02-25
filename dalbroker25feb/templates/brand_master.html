@@ -1,0 +1,271 @@
+{% extends 'base.html' %}
+{% block title %}Brand Master{% endblock %}
+ 
+{% block content %}
+<div class="page-header">
+  <nav class="breadcrumb-custom" aria-label="breadcrumb">
+      <a href="/dashboard/">Dashboard</a>
+      <i class="separator fa fa-chevron-right"></i>
+      <a href="#">Master</a>
+      <i class="separator fa fa-chevron-right"></i>
+      <span class="active">Brand Master</span>
+  </nav>
+ 
+  <div class="d-flex justify-content-between align-items-center">
+      <h1 class="page-title">Brand Master</h1>
+      {% if can_create_brand %}
+      <button type="button" class="btn btn-dal" data-bs-toggle="modal" data-bs-target="#createBrandModal">
+          <i class="fas fa-plus"></i> Add Brand
+      </button>
+      {% endif %}
+  </div>
+</div>
+ 
+<div id="brandAlertBox"></div>
+ 
+<div class="table-responsive card">
+    <table class="table table-custom" id="brandTable">
+        <thead>
+            <tr>
+                <th>Brand ID</th>
+                <th>Brand Name</th>
+                <th>Created At</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for brand in brands %}
+            <tr id="brand-row-{{ brand.id }}">
+                <td>{{ brand.brand_unique_id }}</td>
+                <td>{{ brand.brand_name }}</td>
+                <td>{{ brand.created_at|date:"d/m/y" }}</td>
+                <td>
+                    {% if brand.status == 'active' %}
+                    <span class="badge bg-success">Active</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Inactive</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="d-flex gap-2 justify-content-end">
+                        <button type="button" class="btn-action btn-view view-brand" data-brand-id="{{ brand.id }}" title="View">
+                            <i class="fa-regular fa-eye"></i>
+                        </button>
+                        {% if can_update_brand %}
+                        <button type="button" class="btn-action btn-edit edit-brand" data-brand-id="{{ brand.id }}" title="Edit">
+                            <i class="fa-solid fa-pencil"></i>
+                        </button>
+                        {% endif %}
+                        {% if can_delete_brand %}
+                        <button type="button" class="btn-action btn-delete delete-brand" data-brand-id="{{ brand.id }}" title="Delete">
+                            <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted">No brands found</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% include "_pagination.html" %}
+ 
+<div class="modal fade" id="createBrandModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5>Create Brand</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label">Brand Name *</label>
+          <input type="text" class="form-control" id="create_brand_name">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Status *</label>
+          <select class="form-select" id="create_brand_status">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" id="saveCreateBrand">Create</button>
+      </div>
+    </div>
+  </div>
+</div>
+ 
+<div class="modal fade" id="viewBrandModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5>Brand Details</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div><strong>Brand ID:</strong> <span id="view_brand_unique_id">-</span></div>
+        <div><strong>Brand Name:</strong> <span id="view_brand_name">-</span></div>
+        <div><strong>Status:</strong> <span id="view_brand_status">-</span></div>
+        <div><strong>Created At:</strong> <span id="view_brand_created_at">-</span></div>
+        <div><strong>Created By:</strong> <span id="view_brand_created_by">-</span></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+ 
+<div class="modal fade" id="editBrandModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5>Edit Brand</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        {% csrf_token %}
+        <input type="hidden" id="edit_brand_id">
+        <div class="mb-3">
+          <label class="form-label">Brand Name *</label>
+          <input type="text" class="form-control" id="edit_brand_name">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Status *</label>
+          <select class="form-select" id="edit_brand_status">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" id="saveEditBrand">Update</button>
+      </div>
+    </div>
+  </div>
+</div>
+ 
+<div class="modal fade" id="deleteBrandModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white"><h5>Delete Brand</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        Are you sure you want to delete brand <strong id="delete_brand_name"></strong>?
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-danger" id="confirmDeleteBrand">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+ 
+{% block extra_js %}
+<script>
+const createBrandModal = new bootstrap.Modal(document.getElementById('createBrandModal'));
+const viewBrandModal = new bootstrap.Modal(document.getElementById('viewBrandModal'));
+const editBrandModal = new bootstrap.Modal(document.getElementById('editBrandModal'));
+const deleteBrandModal = new bootstrap.Modal(document.getElementById('deleteBrandModal'));
+let deleteBrandId = null;
+ 
+function csrf() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
+function showBrandAlert(type, msg) {
+  document.getElementById('brandAlertBox').innerHTML = `<div class="alert alert-${type} alert-dismissible fade show">${msg}<button class="btn-close" data-bs-dismiss="alert"></button></div>`;
+}
+function statusBadge(status) {
+  return status === 'active' ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>';
+}
+ 
+document.addEventListener('click', function(e) {
+  const viewBtn = e.target.closest('.view-brand');
+  if (viewBtn) {
+    fetch(`/api/brands/${viewBtn.dataset.brandId}/`).then(r => r.json()).then(data => {
+      if (!data.success) return showBrandAlert('danger', data.message || 'Unable to load brand.');
+      document.getElementById('view_brand_unique_id').textContent = data.brand_unique_id;
+      document.getElementById('view_brand_name').textContent = data.brand_name;
+      document.getElementById('view_brand_status').textContent = data.status;
+      document.getElementById('view_brand_created_at').textContent = data.created_at;
+      document.getElementById('view_brand_created_by').textContent = data.created_by;
+      viewBrandModal.show();
+    });
+    return;
+  }
+ 
+  const editBtn = e.target.closest('.edit-brand');
+  if (editBtn) {
+    fetch(`/api/brands/${editBtn.dataset.brandId}/`).then(r => r.json()).then(data => {
+      if (!data.success) return showBrandAlert('danger', data.message || 'Unable to load brand.');
+      document.getElementById('edit_brand_id').value = data.id;
+      document.getElementById('edit_brand_name').value = data.brand_name;
+      document.getElementById('edit_brand_status').value = data.status;
+      editBrandModal.show();
+    });
+    return;
+  }
+ 
+  const delBtn = e.target.closest('.delete-brand');
+  if (delBtn) {
+    fetch(`/api/brands/${delBtn.dataset.brandId}/`).then(r => r.json()).then(data => {
+      if (!data.success) return showBrandAlert('danger', data.message || 'Unable to load brand.');
+      deleteBrandId = data.id;
+      document.getElementById('delete_brand_name').textContent = data.brand_name;
+      deleteBrandModal.show();
+    });
+  }
+});
+ 
+const saveCreateBrandBtn = document.getElementById('saveCreateBrand');
+if (saveCreateBrandBtn) {
+  saveCreateBrandBtn.onclick = function() {
+    fetch('/api/brands/create/', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+      body: JSON.stringify({
+        brand_name: document.getElementById('create_brand_name').value.trim(),
+        status: document.getElementById('create_brand_status').value,
+      }),
+    }).then(r => r.json()).then(data => {
+      if (!data.success) return showBrandAlert('danger', data.message || 'Unable to create brand.');
+      createBrandModal.hide();
+      showBrandAlert('success', data.message);
+      window.location.reload();
+    });
+  };
+}
+ 
+const saveEditBrandBtn = document.getElementById('saveEditBrand');
+if (saveEditBrandBtn) {
+  saveEditBrandBtn.onclick = function() {
+    const id = document.getElementById('edit_brand_id').value;
+    fetch(`/api/brands/${id}/update/`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+      body: JSON.stringify({
+        brand_name: document.getElementById('edit_brand_name').value.trim(),
+        status: document.getElementById('edit_brand_status').value,
+      }),
+    }).then(r => r.json()).then(data => {
+      if (!data.success) return showBrandAlert('danger', data.message || 'Unable to update brand.');
+      editBrandModal.hide();
+      showBrandAlert('success', data.message);
+      window.location.reload();
+    });
+  };
+}
+ 
+const confirmDeleteBrandBtn = document.getElementById('confirmDeleteBrand');
+if (confirmDeleteBrandBtn) {
+  confirmDeleteBrandBtn.onclick = function() {
+    fetch(`/api/brands/${deleteBrandId}/delete/`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrf()},
+    }).then(r => r.json()).then(data => {
+      if (!data.success) return showBrandAlert('danger', data.message || 'Unable to delete brand.');
+      deleteBrandModal.hide();
+      showBrandAlert('success', data.message);
+      window.location.reload();
+    });
+  };
+}
+</script>
+{% endblock %}

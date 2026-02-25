@@ -1,0 +1,772 @@
+{% extends 'base.html' %}
+
+{% block title %}Transporter Dashboard{% endblock %}
+
+{% block content %}
+<head>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root{
+      --primary:#0f172a;
+      --muted:#64748b;
+      --muted2:#94a3b8;
+      --card:#ffffff;
+      --bg:#f8fafc;
+      --border:#e2e8f0;
+
+      --blue:#3b82f6;
+      --green:#10b981;
+      --amber:#f59e0b;
+      --red:#ef4444;
+      --purple:#8b5cf6;
+      --cyan:#06b6d4;
+
+      --shadow-md: 0 6px 18px rgba(15,23,42,.08);
+    }
+
+    .trans-wrap{ padding:.25rem 0 1.25rem; }
+
+    .page-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:1rem;
+      flex-wrap:wrap;
+      margin-bottom:1.25rem;
+    }
+    .page-head h2{
+      margin:0;
+      font-weight:950;
+      color:var(--primary);
+      letter-spacing:.2px;
+    }
+    .page-sub{
+      color:var(--muted);
+      margin:.25rem 0 0;
+      font-size:.9rem;
+    }
+
+    /* KPI */
+    .kpi-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+      gap:1rem;
+      margin-bottom:1.25rem;
+    }
+    .kpi{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:1.1rem 1.15rem 1rem;
+      box-shadow:var(--shadow-md);
+      position:relative;
+      overflow:hidden;
+      min-height:118px;
+      transition:.2s ease;
+    }
+    .kpi:hover{ transform:translateY(-2px); }
+    .kpi::before{
+      content:"";
+      position:absolute;
+      left:0; top:0; right:0;
+      height:4px;
+      background:linear-gradient(90deg,var(--blue),var(--green));
+    }
+    .kpi.green::before{ background:linear-gradient(90deg,var(--green),#34d399); }
+    .kpi.amber::before{ background:linear-gradient(90deg,var(--amber),#fbbf24); }
+    .kpi.red::before{ background:linear-gradient(90deg,var(--red),#f87171); }
+    .kpi.purple::before{ background:linear-gradient(90deg,var(--purple),#a78bfa); }
+    .kpi.cyan::before{ background:linear-gradient(90deg,var(--cyan),#22d3ee); }
+
+    .kpi-top{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:.75rem;
+      margin-bottom:.65rem;
+    }
+    .kpi-icon{
+      width:46px;height:46px;
+      border-radius:14px;
+      display:flex;align-items:center;justify-content:center;
+      font-size:1.2rem;
+      background:rgba(59,130,246,.10);
+      color:var(--blue);
+    }
+    .kpi.green .kpi-icon{ background:rgba(16,185,129,.10); color:var(--green); }
+    .kpi.amber .kpi-icon{ background:rgba(245,158,11,.12); color:var(--amber); }
+    .kpi.red .kpi-icon{ background:rgba(239,68,68,.10); color:var(--red); }
+    .kpi.purple .kpi-icon{ background:rgba(139,92,246,.10); color:var(--purple); }
+    .kpi.cyan .kpi-icon{ background:rgba(6,182,212,.10); color:var(--cyan); }
+
+    .kpi-title{
+      font-size:.78rem;
+      font-weight:950;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      color:var(--muted);
+      margin:0 0 .25rem;
+    }
+    .kpi-value{
+      font-size:1.75rem;
+      font-weight:950;
+      color:var(--primary);
+      line-height:1.05;
+      margin:0;
+      font-family:"Outfit",system-ui;
+    }
+    .kpi-sub{
+      margin:.4rem 0 0;
+      color:var(--muted);
+      font-size:.85rem;
+    }
+    .kpi-change{
+      margin-top:.4rem;
+      font-size:.82rem;
+      font-weight:950;
+      color:var(--muted);
+      display:flex;
+      align-items:center;
+      gap:.35rem;
+      white-space:nowrap;
+    }
+    .kpi-change.pos{ color:var(--green); }
+    .kpi-change.neg{ color:var(--red); }
+
+    /* Card */
+    .cardx{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:1.15rem;
+      box-shadow:var(--shadow-md);
+      margin-bottom:1rem;
+    }
+    .cardx-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:.75rem;
+      padding-bottom:.85rem;
+      margin-bottom:1rem;
+      border-bottom:1px solid var(--border);
+      flex-wrap:wrap;
+    }
+    .cardx-title{
+      margin:0;
+      font-size:1.02rem;
+      font-weight:950;
+      color:var(--primary);
+    }
+    .filters{ display:flex; gap:.5rem; flex-wrap:wrap; }
+    .fbtn{
+      border:1px solid var(--border);
+      background:transparent;
+      border-radius:12px;
+      padding:.45rem .8rem;
+      font-weight:950;
+      font-size:.85rem;
+      color:var(--muted);
+      cursor:pointer;
+      transition:.15s ease;
+      user-select:none;
+    }
+    .fbtn:hover,.fbtn.active{
+      background:var(--blue);
+      color:#fff;
+      border-color:var(--blue);
+    }
+
+    /* Badges */
+    .sb{
+      display:inline-flex; align-items:center; gap:.35rem;
+      padding:.32rem .65rem;
+      border-radius:999px;
+      font-weight:950;
+      font-size:.75rem;
+      white-space:nowrap;
+    }
+    .sb::before{ content:""; width:7px;height:7px;border-radius:50%; background:currentColor; }
+    .sb.ok{ background:rgba(16,185,129,.12); color:var(--green); }
+    .sb.warn{ background:rgba(245,158,11,.12); color:var(--amber); }
+    .sb.bad{ background:rgba(239,68,68,.12); color:var(--red); }
+    .sb.info{ background:rgba(59,130,246,.12); color:var(--blue); }
+    .sb.purp{ background:rgba(139,92,246,.12); color:var(--purple); }
+
+    /* Tables */
+    .table thead th{
+      white-space:nowrap;
+      font-size:.72rem;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      color:var(--primary);
+      font-weight:950;
+      background:var(--bg);
+      border-top:0;
+    }
+    .table td{ vertical-align:middle; white-space:nowrap; }
+
+    /* Mini list */
+    .mini{ display:flex; flex-direction:column; gap:.75rem; }
+    .mini-row{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:1rem;
+      padding:.8rem;
+      background:var(--bg);
+      border:1px solid var(--border);
+      border-radius:14px;
+    }
+    .mini-row h6{
+      margin:0 0 .15rem;
+      font-weight:950;
+      color:var(--primary);
+      font-size:.92rem;
+    }
+    .mini-row p{ margin:0; color:var(--muted); font-size:.84rem; }
+    .mini-right{
+      text-align:right;
+      color:var(--muted2);
+      font-size:.8rem;
+      white-space:nowrap;
+    }
+    @media(max-width:768px){
+      .mini-row{ flex-direction:column; }
+      .mini-right{ text-align:left; }
+    }
+  </style>
+</head>
+
+<div class="trans-wrap">
+  <div class="page-head">
+    <div>
+      <h2>Transporter Dashboard</h2>
+      <p class="page-sub">Welcome, {{ user.username }}! Track shipments, SLAs, earnings & fleet utilization.</p>
+    </div>
+    <div class="text-muted small"><span id="transNow"></span></div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi cyan">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-rupee-sign"></i></div></div>
+      <div class="kpi-title">Earnings (MTD)</div>
+      <p class="kpi-value" id="kpiEarn">—</p>
+      <div class="kpi-change pos"><i class="fas fa-arrow-up"></i><span id="kpiEarnDelta">—</span></div>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-box"></i></div></div>
+      <div class="kpi-title">Active Shipments</div>
+      <p class="kpi-value" id="kpiActive">—</p>
+      <p class="kpi-sub">Pickup due: <strong id="kpiPickupDue">—</strong></p>
+    </div>
+
+    <div class="kpi green">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-check-circle"></i></div></div>
+      <div class="kpi-title">Delivered (MTD)</div>
+      <p class="kpi-value" id="kpiDelivered">—</p>
+      <p class="kpi-sub">On-time: <strong id="kpiOnTime">—</strong></p>
+    </div>
+
+    <div class="kpi amber">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-truck-moving"></i></div></div>
+      <div class="kpi-title">In Transit</div>
+      <p class="kpi-value" id="kpiInTransit">—</p>
+      <p class="kpi-sub">Avg ETA: <strong id="kpiAvgETA">—</strong></p>
+    </div>
+
+    <div class="kpi red">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-triangle-exclamation"></i></div></div>
+      <div class="kpi-title">Delayed / Exceptions</div>
+      <p class="kpi-value" id="kpiDelayed">—</p>
+      <p class="kpi-sub">Incidents: <strong id="kpiIncidents">—</strong></p>
+    </div>
+
+    <div class="kpi purple">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-gas-pump"></i></div></div>
+      <div class="kpi-title">Cost per KM</div>
+      <p class="kpi-value" id="kpiCostKm">—</p>
+      <p class="kpi-sub">Fuel variance: <strong id="kpiFuelVar">—</strong></p>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-truck"></i></div></div>
+      <div class="kpi-title">Fleet Utilization</div>
+      <p class="kpi-value" id="kpiUtil">—</p>
+      <p class="kpi-sub">Active vehicles: <strong id="kpiVehicles">—</strong></p>
+    </div>
+
+    <div class="kpi green">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-stopwatch"></i></div></div>
+      <div class="kpi-title">Avg Delivery Time</div>
+      <p class="kpi-value" id="kpiAvgTime">—</p>
+      <p class="kpi-sub">SLA breach rate: <strong id="kpiBreach">—</strong></p>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="row">
+    <div class="col-lg-8">
+      <div class="cardx">
+        <div class="cardx-head">
+          <h4 class="cardx-title">Earnings & Shipments Trend</h4>
+          <div class="filters" id="trendFilters">
+            <button class="fbtn active" data-range="7D">7D</button>
+            <button class="fbtn" data-range="1M">1M</button>
+            <button class="fbtn" data-range="3M">3M</button>
+            <button class="fbtn" data-range="1Y">1Y</button>
+          </div>
+        </div>
+        <canvas id="earnShipChart" height="90"></canvas>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="cardx">
+        <div class="cardx-head">
+          <h4 class="cardx-title">Delivery Status</h4>
+        </div>
+        <canvas id="deliveryStatusChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-4">
+      <div class="cardx">
+        <div class="cardx-head"><h4 class="cardx-title">Transport Types</h4></div>
+        <canvas id="transportTypeChart" height="200"></canvas>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="cardx">
+        <div class="cardx-head"><h4 class="cardx-title">Top Routes (Trips)</h4></div>
+        <canvas id="topRoutesChart" height="200"></canvas>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="cardx">
+        <div class="cardx-head"><h4 class="cardx-title">SLA: On-time % (Drivers)</h4></div>
+        <canvas id="driverSlaChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECENT SHIPMENTS + EXCEPTIONS -->
+  <div class="row">
+    <div class="col-lg-5">
+      <div class="cardx">
+        <div class="cardx-head"><h4 class="cardx-title">Recent Updates</h4></div>
+
+        <div class="mini">
+          <div class="mini-row">
+            <div>
+              <h6>LR-11208 • Nagpur → Pune</h6>
+              <p>#CNT-7812 • Loaded • Last scan: Wardha • ETA: Feb 05</p>
+              <span class="sb info">In Transit</span>
+            </div>
+            <div class="mini-right">12 min ago</div>
+          </div>
+
+          <div class="mini-row">
+            <div>
+              <h6>LR-11151 • Indore → Bhopal</h6>
+              <p>#CNT-7810 • Pickup scheduled 18:00 • Dock ready</p>
+              <span class="sb warn">Pickup Due</span>
+            </div>
+            <div class="mini-right">2 hrs ago</div>
+          </div>
+
+          <div class="mini-row">
+            <div>
+              <h6>LR-11021 • Katni → Delhi</h6>
+              <p>#ORD-5419 • Delivered • POD uploaded</p>
+              <span class="sb ok">Delivered</span>
+            </div>
+            <div class="mini-right">Today</div>
+          </div>
+
+          <div class="mini-row">
+            <div>
+              <h6>INC-044 • Delay Exception</h6>
+              <p>Route: Raipur → Nagpur • Reason: highway closure • SLA at risk</p>
+              <span class="sb bad">Exception</span>
+            </div>
+            <div class="mini-right">Today</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="cardx">
+        <div class="cardx-head">
+          <h4 class="cardx-title">Recent Shipments</h4>
+          <div class="text-muted small">Includes contract reference + SLA</div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-striped align-middle">
+            <thead>
+              <tr>
+                <th>LR / Shipment</th>
+                <th>Contract</th>
+                <th>Seller → Buyer</th>
+                <th>Route</th>
+                <th>Commodity</th>
+                <th>Status</th>
+                <th>SLA</th>
+                <th>ETA</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>LR-11208</strong></td>
+                <td>#CNT-7812</td>
+                <td>ABC Traders → Shree Foods</td>
+                <td>Nagpur → Pune</td>
+                <td>Toor Dal</td>
+                <td><span class="sb info">In Transit</span></td>
+                <td><span class="sb ok">On Track</span></td>
+                <td>Feb 05</td>
+              </tr>
+              <tr>
+                <td><strong>LR-11177</strong></td>
+                <td>#CNT-7808</td>
+                <td>VWX Merchants → YZA Retailers</td>
+                <td>Katni → Indore</td>
+                <td>Masoor Dal</td>
+                <td><span class="sb info">In Transit</span></td>
+                <td><span class="sb warn">At Risk</span></td>
+                <td>Feb 04</td>
+              </tr>
+              <tr>
+                <td><strong>LR-11151</strong></td>
+                <td>#CNT-7810</td>
+                <td>GHI Trading → PQR Buyers</td>
+                <td>Indore → Bhopal</td>
+                <td>Chana Dal</td>
+                <td><span class="sb warn">Pickup Due</span></td>
+                <td><span class="sb ok">On Track</span></td>
+                <td>Feb 06</td>
+              </tr>
+              <tr>
+                <td><strong>LR-11098</strong></td>
+                <td>#CNT-7811</td>
+                <td>DEF Suppliers → MNO Industries</td>
+                <td>Katni → Delhi</td>
+                <td>Moong Dal</td>
+                <td><span class="sb ok">Delivered</span></td>
+                <td><span class="sb ok">On Time</span></td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <td><strong>LR-11063</strong></td>
+                <td>#CNT-7807</td>
+                <td>Prime Pulses → Om Sai Traders</td>
+                <td>Raipur → Nagpur</td>
+                <td>Tur (Arhar)</td>
+                <td><span class="sb bad">Delayed</span></td>
+                <td><span class="sb bad">Breach</span></td>
+                <td>Feb 05</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- DRIVER / VEHICLE SNAPSHOT -->
+  <div class="cardx">
+    <div class="cardx-head">
+      <h4 class="cardx-title">Fleet Snapshot</h4>
+      <div class="text-muted small">Driver score, vehicle availability, utilization</div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-striped align-middle">
+        <thead>
+          <tr>
+            <th>Driver</th>
+            <th>Vehicle</th>
+            <th>Active Trip</th>
+            <th>On-time %</th>
+            <th>Incidents</th>
+            <th>Utilization</th>
+            <th>Last Service</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>R. Pawar</strong></td>
+            <td>MH-31-AT-9044</td>
+            <td>LR-11208</td>
+            <td>92%</td>
+            <td>1</td>
+            <td>81%</td>
+            <td>Jan 18</td>
+          </tr>
+          <tr>
+            <td><strong>S. Yadav</strong></td>
+            <td>MP-20-BK-1129</td>
+            <td>LR-11177</td>
+            <td>88%</td>
+            <td>0</td>
+            <td>76%</td>
+            <td>Jan 09</td>
+          </tr>
+          <tr>
+            <td><strong>A. Khan</strong></td>
+            <td>MP-09-CP-5531</td>
+            <td>LR-11151</td>
+            <td>84%</td>
+            <td>2</td>
+            <td>69%</td>
+            <td>Dec 28</td>
+          </tr>
+          <tr>
+            <td><strong>N. Singh</strong></td>
+            <td>CG-04-KL-7720</td>
+            <td>LR-11063</td>
+            <td>79%</td>
+            <td>3</td>
+            <td>73%</td>
+            <td>Jan 02</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Date/time
+  const now = new Date();
+  document.getElementById("transNow").textContent =
+    now.toLocaleString("en-IN", { weekday:"long", year:"numeric", month:"short", day:"2-digit", hour:"2-digit", minute:"2-digit" });
+
+  // Dummy transporter analytics (swap with backend later)
+  const TRANS_DUMMY = {
+    kpis:{
+      earn:"₹3.42L",
+      earnDelta:"10% vs last month",
+      active:8,
+      pickupDue:3,
+      delivered:41,
+      onTime:"88%",
+      inTransit:5,
+      avgETA:"2.3 days",
+      delayed:1,
+      incidents:4,
+      costKm:"₹21.6",
+      fuelVar:"+2.1%",
+      util:"78%",
+      vehicles:12,
+      avgTime:"2.6 days",
+      breach:"4.8%"
+    },
+    ranges:{
+      "7D": { labels:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], earnLakhs:[0.32,0.46,0.28,0.55,0.49,0.38,0.62], shipments:[6,7,5,8,7,6,9] },
+      "1M": { labels:["W1","W2","W3","W4"], earnLakhs:[1.02,0.88,0.96,1.12], shipments:[24,20,22,26] },
+      "3M": { labels:["Nov","Dec","Jan"], earnLakhs:[2.8,3.1,3.42], shipments:[58,63,71] },
+      "1Y": { labels:["Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan"], earnLakhs:[1.6,1.7,1.8,2.0,2.1,2.2,2.3,2.4,2.6,2.8,3.1,3.42], shipments:[38,41,44,46,48,50,52,54,56,58,63,71] }
+    },
+    deliveryStatus:{ labels:["Delivered","In Transit","Pickup Due","Delayed"], counts:[52,5,3,1] },
+    transportTypes:{ labels:["Truck","Train","Air","Ship"], share:[78,16,4,2] },
+    topRoutes:{ labels:["Nagpur→Pune","Katni→Delhi","Indore→Bhopal","Raipur→Nagpur","Katni→Indore"], trips:[16,13,11,9,8] },
+    driverSla:{ labels:["R. Pawar","S. Yadav","A. Khan","N. Singh","V. Patil"], onTimePct:[92,88,84,79,90] }
+  };
+
+  // Mount KPIs
+  (function(){
+    const k=TRANS_DUMMY.kpis;
+    const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+
+    set("kpiEarn",k.earn);
+    set("kpiEarnDelta",k.earnDelta);
+    set("kpiActive",k.active);
+    set("kpiPickupDue",k.pickupDue);
+    set("kpiDelivered",k.delivered);
+    set("kpiOnTime",k.onTime);
+    set("kpiInTransit",k.inTransit);
+    set("kpiAvgETA",k.avgETA);
+    set("kpiDelayed",k.delayed);
+    set("kpiIncidents",k.incidents);
+    set("kpiCostKm",k.costKm);
+    set("kpiFuelVar",k.fuelVar);
+    set("kpiUtil",k.util);
+    set("kpiVehicles",k.vehicles);
+    set("kpiAvgTime",k.avgTime);
+    set("kpiBreach",k.breach);
+  })();
+
+  const makeChart=(ctx,cfg)=>new Chart(ctx,cfg);
+
+  // Trend chart
+  let trendChart;
+  function initTrend(rangeKey="7D"){
+    const r=TRANS_DUMMY.ranges[rangeKey];
+    const ctx=document.getElementById("earnShipChart").getContext("2d");
+
+    trendChart = makeChart(ctx,{
+      type:"bar",
+      data:{
+        labels:r.labels,
+        datasets:[
+          {
+            type:"line",
+            label:"Earnings (₹ Lakhs)",
+            data:r.earnLakhs,
+            borderColor:"#06b6d4",
+            backgroundColor:"rgba(6,182,212,.12)",
+            borderWidth:3,
+            tension:.35,
+            fill:true,
+            yAxisID:"y"
+          },
+          {
+            label:"Shipments",
+            data:r.shipments,
+            backgroundColor:"rgba(59,130,246,.75)",
+            borderRadius:10,
+            borderSkipped:false,
+            yAxisID:"y1"
+          }
+        ]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:true,
+        plugins:{
+          legend:{ position:"top", labels:{ usePointStyle:true, padding:16, font:{ size:12, weight:"950" } } },
+          tooltip:{ backgroundColor:"#0f172a", padding:12 }
+        },
+        scales:{
+          y:{ beginAtZero:true, grid:{ color:"#e2e8f0" }, title:{ display:true, text:"₹ Lakhs" } },
+          y1:{ beginAtZero:true, position:"right", grid:{ display:false }, title:{ display:true, text:"Shipments" } },
+          x:{ grid:{ display:false } }
+        }
+      }
+    });
+  }
+  initTrend("7D");
+
+  // Delivery Status
+  makeChart(document.getElementById("deliveryStatusChart").getContext("2d"),{
+    type:"doughnut",
+    data:{
+      labels:TRANS_DUMMY.deliveryStatus.labels,
+      datasets:[{
+        data:TRANS_DUMMY.deliveryStatus.counts,
+        backgroundColor:["#10b981","#3b82f6","#f59e0b","#ef4444"],
+        borderWidth:0
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:true,
+      plugins:{
+        legend:{ position:"bottom", labels:{ usePointStyle:true, padding:14, font:{ size:12, weight:"950" } } },
+        tooltip:{ backgroundColor:"#0f172a", padding:12 }
+      }
+    }
+  });
+
+  // Transport Types
+  makeChart(document.getElementById("transportTypeChart").getContext("2d"),{
+    type:"pie",
+    data:{
+      labels:TRANS_DUMMY.transportTypes.labels,
+      datasets:[{
+        data:TRANS_DUMMY.transportTypes.share,
+        backgroundColor:["#3b82f6","#10b981","#f59e0b","#06b6d4"],
+        borderWidth:0
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:true,
+      plugins:{
+        legend:{ position:"bottom", labels:{ usePointStyle:true, padding:14, font:{ size:12, weight:"950" } } },
+        tooltip:{ backgroundColor:"#0f172a", padding:12 }
+      }
+    }
+  });
+
+  // Top Routes
+  makeChart(document.getElementById("topRoutesChart").getContext("2d"),{
+    type:"bar",
+    data:{
+      labels:TRANS_DUMMY.topRoutes.labels,
+      datasets:[{
+        label:"Trips",
+        data:TRANS_DUMMY.topRoutes.trips,
+        backgroundColor:"rgba(16,185,129,.75)",
+        borderRadius:10,
+        borderSkipped:false
+      }]
+    },
+    options:{
+      indexAxis:"y",
+      responsive:true,
+      maintainAspectRatio:true,
+      plugins:{ legend:{ display:false }, tooltip:{ backgroundColor:"#0f172a", padding:12 } },
+      scales:{
+        x:{ beginAtZero:true, grid:{ color:"#e2e8f0" } },
+        y:{ grid:{ display:false } }
+      }
+    }
+  });
+
+  // Driver SLA
+  makeChart(document.getElementById("driverSlaChart").getContext("2d"),{
+    type:"bar",
+    data:{
+      labels:TRANS_DUMMY.driverSla.labels,
+      datasets:[{
+        label:"On-time %",
+        data:TRANS_DUMMY.driverSla.onTimePct,
+        backgroundColor:"rgba(139,92,246,.75)",
+        borderRadius:10,
+        borderSkipped:false
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:true,
+      plugins:{ legend:{ display:false }, tooltip:{ backgroundColor:"#0f172a", padding:12 } },
+      scales:{
+        y:{ beginAtZero:true, max:100, grid:{ color:"#e2e8f0" } },
+        x:{ grid:{ display:false } }
+      }
+    }
+  });
+
+  // Filters
+  document.querySelectorAll("#trendFilters .fbtn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll("#trendFilters .fbtn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+
+      const range=btn.dataset.range;
+      const r=TRANS_DUMMY.ranges[range];
+      if(!r || !trendChart) return;
+
+      trendChart.data.labels=r.labels;
+      trendChart.data.datasets[0].data=r.earnLakhs;
+      trendChart.data.datasets[1].data=r.shipments;
+      trendChart.update();
+    });
+  });
+</script>
+{% endblock %}

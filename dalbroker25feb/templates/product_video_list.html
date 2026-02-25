@@ -1,0 +1,312 @@
+{% extends 'base.html' %}
+
+{% block title %}Product Video Management{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <!-- Breadcrumb -->
+  <nav class="breadcrumb-custom" aria-label="breadcrumb">
+      <a href="/dashboard/">Dashboard</a>
+      <i class="separator fa fa-chevron-right"></i>
+      <a href="#">Product</a>
+      <i class="separator fa fa-chevron-right"></i>
+      <span class="active">Product Videos</span>
+  </nav>
+
+  <!-- Page Title -->
+  <div class="d-flex justify-content-between align-items-center">
+      <h1 class="page-title">Product Videos</h1>
+
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-dal" data-bs-toggle="modal" data-bs-target="#createVideoModal">
+            <i class="fas fa-plus"></i> Add Product Video
+        </button>
+      </div>
+  </div>
+</div>
+
+
+    <div class="card-custom">
+        <div class="w-100">
+                <div id="videoAlertBox"></div>
+
+                <div class="row">
+                    {% for video in videos %}
+                    <div class="col-md-4 mb-4" id="video-card-{{ video.id }}">
+                        <div class="card p-1">
+                            <video class="card-img-top" controls style="height: 200px; object-fit: cover;">
+                                <source src="{{ video.video.url }}" type="video/mp4">
+                                Your browser does not support the video tag.
+                            </video>
+                            <div class="card-body">
+                                <h5 class="card-title">{{ video.product.title }}</h5>
+                                {% if video.title %}
+                                <p class="card-text">{{ video.title }}</p>
+                                {% endif %}
+                                <p class="card-text">
+                                    {% if video.is_primary %}
+                                        <span class="badge bg-primary">Primary Video</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Secondary</span>
+                                    {% endif %}
+                                </p>
+                                <p class="card-text"><small class="text-muted">Uploaded: {{ video.created_at|date:"M d, Y" }}</small></p>
+                                <button type="button" class="btn btn-sm btn-outline-danger delete-video" data-video-id="{{ video.id }}">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-12 text-center">
+                        <p>No product videos found. Click "Add Product Video" to upload one.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% include "_pagination.html" %}
+
+        </div>
+    </div>
+
+
+<!-- Create Product Video Modal -->
+<div class="modal fade" id="createVideoModal" tabindex="-1" aria-labelledby="createVideoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createVideoModalLabel">Add Product Video</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createVideoForm" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="create_product" class="form-label">Product *</label>
+                        <select class="form-select" id="create_product" name="product_id" required>
+                            <option value="">Select Product</option>
+                            {% for product in products %}
+                            <option value="{{ product.id }}">{{ product.title }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">Please select a product.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="create_title" class="form-label">Video Title (Optional)</label>
+                        <input type="text" class="form-control" id="create_title" name="title" placeholder="Enter video title">
+                    </div>
+                    <div class="mb-3">
+                        <label for="create_video" class="form-label">Video *</label>
+                        <input type="file" class="form-control" id="create_video" name="video" accept="video/*" required>
+                        <div class="invalid-feedback">Please select a video file.</div>
+                        <div class="form-text">Supported formats: MP4, MOV, AVI, WebM. Max size: 50MB.</div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="create_is_primary" name="is_primary">
+                            <label class="form-check-label" for="create_is_primary">
+                                Set as Primary Video
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveCreateVideo">Upload Video</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Product Video Modal -->
+<div class="modal fade" id="deleteVideoModal" tabindex="-1" aria-labelledby="deleteVideoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteVideoModalLabel">Delete Product Video</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this product video?</p>
+                <div id="deleteVideoInfo">
+                    <strong>Product:</strong> <span id="delete_video_product"></span><br>
+                    <video id="delete_video_preview" controls style="max-width: 200px; max-height: 150px; margin-top: 10px;">
+                        <source src="" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteVideo">Delete Video</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Product Video Management JavaScript
+const createVideoModal = new bootstrap.Modal(document.getElementById('createVideoModal'));
+const deleteVideoModal = new bootstrap.Modal(document.getElementById('deleteVideoModal'));
+let deleteVideoId = null;
+
+// ===================== VIDEO ALERT =====================
+function showVideoAlert(type, msg){
+    document.getElementById("videoAlertBox").innerHTML = `
+        <div class="alert alert-${type} alert-dismissible fade show">
+            ${msg}
+            <button class="btn-close" data-bs-dismiss="alert"></button>
+        </div>`;
+}
+
+// ===================== EVENT DELEGATION =====================
+document.addEventListener("click", function(e){
+
+    // -------- DELETE VIDEO --------
+    if(e.target.classList.contains("delete-video") || e.target.closest(".delete-video")){
+        const button = e.target.classList.contains("delete-video") ? e.target : e.target.closest(".delete-video");
+        deleteVideoId = button.dataset.videoId;
+
+        // Get video data for confirmation
+        fetch(`/api/product-videos/${deleteVideoId}/`)
+        .then(res => res.json())
+        .then(video => {
+            if (video.success === false) {
+                showVideoAlert("danger", video.message);
+                return;
+            }
+            document.getElementById("delete_video_product").textContent = video.product_title;
+            document.getElementById("delete_video_preview").src = video.video_url;
+            deleteVideoModal.show();
+        })
+        .catch(error => {
+            // Fallback - just show the modal without preview
+            deleteVideoModal.show();
+        });
+    }
+});
+
+// ===================== CREATE VIDEO =====================
+document.getElementById("saveCreateVideo").onclick = function(){
+    const formData = new FormData();
+    const productSelect = document.getElementById("create_product");
+    const videoFile = document.getElementById("create_video");
+    const titleInput = document.getElementById("create_title");
+    const isPrimary = document.getElementById("create_is_primary");
+
+    // Client-side validation
+    if (!productSelect.value || videoFile.files.length === 0) {
+        showVideoAlert("danger", "Product and at least one video are required.");
+        return;
+    }
+
+    formData.append('product', productSelect.value);
+    Array.from(videoFile.files).forEach(file => formData.append('video', file));
+    formData.append('title', titleInput.value || '');
+    formData.append('is_primary', isPrimary.checked);
+    formData.append('csrfmiddlewaretoken', document.querySelector("[name=csrfmiddlewaretoken]").value);
+
+    fetch('/api/product-videos/',{
+        method:"POST",
+        body: formData
+    })
+    .then(res => {
+        if(res.ok){
+            return res.json().then(r => {
+                createVideoModal.hide();
+                document.getElementById("createVideoForm").reset();
+                showVideoAlert("success", r.message || "Video uploaded successfully.");
+
+                // Add new video card
+                const videoContainer = document.querySelector('.row');
+                const newCard = document.createElement('div');
+                newCard.className = 'col-md-4 mb-4';
+                newCard.id = `video-card-${r.id}`;
+                newCard.innerHTML = `
+                    <div class="card">
+                        <video class="card-img-top" controls style="height: 200px; object-fit: cover;">
+                            <source src="${r.video_url}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                        <div class="card-body">
+                            <h5 class="card-title">${r.product_title}</h5>
+                            ${r.title ? `<p class="card-text">${r.title}</p>` : ''}
+                            <p class="card-text">
+                                ${r.is_primary ? 
+                                    '<span class="badge bg-primary">Primary Video</span>' : 
+                                    '<span class="badge bg-secondary">Secondary</span>'}
+                            </p>
+                            <p class="card-text"><small class="text-muted">Uploaded: ${new Date().toLocaleDateString()}</small></p>
+                            <button type="button" class="btn btn-sm btn-outline-danger delete-video" data-video-id="${r.id}">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                // Remove empty message if it exists
+                const emptyMessage = videoContainer.querySelector('.col-12.text-center');
+                if (emptyMessage) {
+                    emptyMessage.remove();
+                }
+                
+                videoContainer.appendChild(newCard);
+            });
+        }else{
+            return res.json().then(r => {
+                const errorMsg = r.detail || r.message || Object.values(r).flat().join('\n') || 'Upload failed';
+                showVideoAlert("danger", errorMsg);
+            }).catch(() => showVideoAlert("danger", "Upload failed"));
+        }
+    })
+    .catch(error => {
+        showVideoAlert("danger", "Error uploading video.");
+    });
+};
+
+// ===================== DELETE VIDEO =====================
+document.getElementById("confirmDeleteVideo").onclick = function(){
+    fetch(`/api/product-videos/${deleteVideoId}/`,{
+        method:"DELETE",
+        headers:{
+            "X-CSRFToken":document.querySelector("[name=csrfmiddlewaretoken]").value
+        }
+    })
+    .then(res => {
+        if(res.ok){
+            deleteVideoModal.hide();
+            document.getElementById(`video-card-${deleteVideoId}`).remove();
+            showVideoAlert("success", "Video deleted successfully.");
+            
+            // Check if container is empty
+            const videoContainer = document.querySelector('.row');
+            const videoCards = videoContainer.querySelectorAll('.col-md-4.mb-4');
+            if (videoCards.length === 0) {
+                videoContainer.innerHTML = `
+                    <div class="col-12 text-center">
+                        <p>No product videos found. Click "Add Product Video" to upload one.</p>
+                    </div>
+                `;
+            }
+        }else{
+            return res.json().then(r => {
+                const errorMsg = r.detail || r.message || Object.values(r).flat().join('\n') || 'Delete failed';
+                showVideoAlert("danger", errorMsg);
+            }).catch(() => showVideoAlert("danger", "Delete failed"));
+        }
+    })
+    .catch(error => {
+        showVideoAlert("danger", "Error deleting video.");
+    });
+};
+
+// ===================== SAFETY CLEANUP =====================
+document.addEventListener("hidden.bs.modal", function(){
+    document.body.classList.remove("modal-open");
+    document.querySelectorAll(".modal-backdrop").forEach(b=>b.remove());
+});
+</script>
+{% endblock %}

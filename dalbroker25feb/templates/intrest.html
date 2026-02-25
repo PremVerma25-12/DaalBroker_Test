@@ -1,0 +1,565 @@
+{% extends 'base.html' %}
+
+{% block title %}Contracts / Deals Management{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <nav class="breadcrumb-custom" aria-label="breadcrumb">
+        <a href="/dashboard/">Dashboard</a>
+        <i class="separator fa fa-chevron-right"></i>
+        <a href="#">Contracts</a>
+        <i class="separator fa fa-chevron-right"></i>
+        <span class="active">Deals List</span>
+    </nav>
+    
+    <div class="d-flex justify-content-between align-items-center">
+        <h1 class="page-title">Contracts / Deals Management</h1>
+        {% if is_admin_or_super_admin %}
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-primary" id="exportExcelBtn">
+                <i class="fas fa-file-excel"></i> Export
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div id="contractAlertBox"></div>
+<form id="csrfTokenForm" class="d-none">{% csrf_token %}</form>
+
+{% if highlighted_contract %}
+<div class="card border-success mb-3">
+    <div class="card-header bg-success text-white">
+        Recently Confirmed Deal
+    </div>
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-md-3"><strong>Contract ID:</strong> {{ highlighted_contract.contract_id }}</div>
+            <div class="col-md-3"><strong>Product:</strong> {{ highlighted_contract.product.title }}</div>
+            <div class="col-md-3"><strong>Buyer:</strong> {{ highlighted_contract.buyer.buyer_unique_id|default:"BUY-" }}{% if not highlighted_contract.buyer.buyer_unique_id %}{{ highlighted_contract.buyer.id|stringformat:"06d" }}{% endif %}</div>
+            <div class="col-md-3"><strong>Seller:</strong> SEL-{{ highlighted_contract.seller.id|stringformat:"06d" }}</div>
+            <div class="col-md-3"><strong>Deal Amount:</strong> ₹{{ highlighted_contract.deal_amount }}/{{ highlighted_contract.amount_unit }}</div>
+            <div class="col-md-3"><strong>Quantity:</strong> {{ highlighted_contract.deal_quantity }} {{ highlighted_contract.quantity_unit }}</div>
+            <div class="col-md-3"><strong>Loading:</strong> {{ highlighted_contract.loading_from }} -> {{ highlighted_contract.loading_to }}</div>
+            <div class="col-md-3"><strong>Confirmed At:</strong> {{ highlighted_contract.confirmed_at|date:"d-m-Y H:i" }}</div>
+            <div class="col-md-12"><strong>Buyer Remark:</strong> {{ highlighted_contract.buyer_remark|default:"-" }}</div>
+            <div class="col-md-12"><strong>Seller Remark:</strong> {{ highlighted_contract.seller_remark|default:"-" }}</div>
+            <div class="col-md-12"><strong>Admin Remark:</strong> {{ highlighted_contract.admin_remark|default:"-" }}</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Filter Section -->
+<div class="card p-3 mb-3">
+    <form method="get" class="row g-3">
+        <div class="col-md-3">
+            <input type="text" name="search" class="form-control" placeholder="Contract ID / Product..." value="{{ request.GET.search|default:'' }}">
+        </div>
+        <div class="col-md-2">
+            <select name="status" class="form-select">
+                <option value="">All Status</option>
+                <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
+                <option value="completed" {% if request.GET.status == 'completed' %}selected{% endif %}>Completed</option>
+                <option value="cancelled" {% if request.GET.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+            </select>
+        </div>
+        {% if is_admin_or_super_admin %}
+        <div class="col-md-2">
+            <select name="seller" class="form-select">
+                <option value="">All Sellers</option>
+                {% for seller in sellers %}
+                <option value="{{ seller.id }}" {% if request.GET.seller == seller.id|stringformat:"s" %}selected{% endif %}>SEL-{{ seller.id|stringformat:"06d" }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select name="buyer" class="form-select">
+                <option value="">All Buyers</option>
+                {% for buyer in buyers %}
+                <option value="{{ buyer.id }}" {% if request.GET.buyer == buyer.id|stringformat:"s" %}selected{% endif %}>{{ buyer.buyer_unique_id|default:"BUY-" }}{% if not buyer.buyer_unique_id %}{{ buyer.id|stringformat:"06d" }}{% endif %}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <div class="col-md-3">
+            <button type="submit" class="btn btn-primary">Apply Filters</button>
+            <a href="{% url 'intrast_page' %}" class="btn btn-outline-secondary">Reset</a>
+        </div>
+    </form>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Total Contracts</h6>
+                        <h2 class="mb-0">{{ total_contracts }}</h2>
+                    </div>
+                    <i class="fas fa-file-contract fa-2x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Active Deals</h6>
+                        <h2 class="mb-0">{{ active_contracts }}</h2>
+                    </div>
+                    <i class="fas fa-handshake fa-2x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Completed</h6>
+                        <h2 class="mb-0">{{ completed_contracts }}</h2>
+                    </div>
+                    <i class="fas fa-check-circle fa-2x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Total Value</h6>
+                        <h2 class="mb-0">₹{{ total_value|floatformat:2 }}</h2>
+                    </div>
+                    <i class="fas fa-rupee-sign fa-2x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Contracts Table -->
+<div class="table-responsive card">
+    <table class="table table-hover" id="contractsTable">
+        <thead class="table-light">
+            <tr>
+                <th>Contract ID</th>
+                <th>Product</th>
+                <th>Buyer</th>
+                <th>Seller</th>
+                <th>Deal Amount</th>
+                <th>Quantity</th>
+                <th>Loading</th>
+                <th>Confirmed Date</th>
+                <th>Status</th>
+                {% if is_admin_or_super_admin %}
+                <th>Actions</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for contract in contracts %}
+            <tr>
+                <td>
+                    <strong>{{ contract.contract_id }}</strong>
+                </td>
+                <td>
+                    <a href="#" class="product-link" data-product-id="{{ contract.product.id }}">
+                        {{ contract.product.title }}
+                    </a>
+                </td>
+                <td>{{ contract.buyer.buyer_unique_id|default:"BUY-" }}{% if not contract.buyer.buyer_unique_id %}{{ contract.buyer.id|stringformat:"06d" }}{% endif %}</td>
+                <td>SEL-{{ contract.seller.id|stringformat:"06d" }}</td>
+                <td>
+                    <span class="fw-bold text-primary">&#8377;{{ contract.deal_amount }}/{{ contract.amount_unit }}</span>
+                </td>
+                <td>
+                    {{ contract.deal_quantity }} {{ contract.quantity_unit }}
+                </td>
+                <td>
+                    <small>{{ contract.loading_from }} &rarr; {{ contract.loading_to }}</small>
+                </td>
+                <td>{{ contract.confirmed_at|date:"d-m-Y H:i" }}</td>
+                <td>
+                    {% if contract.status == 'active' %}
+                        <span class="badge bg-success">Active</span>
+                    {% elif contract.status == 'completed' %}
+                        <span class="badge bg-primary">Completed</span>
+                    {% elif contract.status == 'cancelled' %}
+                        <span class="badge bg-danger">Cancelled</span>
+                    {% endif %}
+                </td>
+                {% if is_admin_or_super_admin %}
+                <td>
+                    <div class="contract-actions" role="group" aria-label="Contract actions">
+                        <button type="button" class="btn btn-sm btn-primary view-contract"
+                                data-contract-id="{{ contract.id }}">
+                            <i class="fas fa-eye me-1"></i> Show
+                        </button>
+                        <button type="button" class="btn btn-sm btn-warning edit-contract"
+                                data-contract-id="{{ contract.id }}">
+                            <i class="fas fa-edit me-1"></i> Edit
+                        </button>
+                    </div>
+                </td>
+                {% endif %}
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="{% if is_admin_or_super_admin %}10{% else %}9{% endif %}" class="text-center py-4">
+                    <i class="fas fa-file-contract fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No contracts found.</p>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% include "_pagination.html" %}
+
+<!-- View Contract Modal -->
+<div class="modal fade" id="viewContractModal" tabindex="-1" aria-labelledby="viewContractModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="viewContractModalLabel">Contract Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <th>Contract ID:</th>
+                                <td id="view_contract_id"></td>
+                            </tr>
+                            <tr>
+                                <th>Product:</th>
+                                <td id="view_product"></td>
+                            </tr>
+                            <tr>
+                                <th>Product ID:</th>
+                                <td id="view_product_id"></td>
+                            </tr>
+                            <tr>
+                                <th>Buyer:</th>
+                                <td id="view_buyer"></td>
+                            </tr>
+                            <tr>
+                                <th>Seller:</th>
+                                <td id="view_seller"></td>
+                            </tr>
+                            <tr>
+                                <th>Seller Quantity:</th>
+                                <td id="view_seller_quantity"></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <th>Deal Amount:</th>
+                                <td id="view_deal_amount"></td>
+                            </tr>
+                            <tr>
+                                <th>Quantity:</th>
+                                <td id="view_quantity"></td>
+                            </tr>
+                            <tr>
+                                <th>Buyer Offer Amount:</th>
+                                <td id="view_buyer_offer_amount"></td>
+                            </tr>
+                            <tr>
+                                <th>Buyer Required Quantity:</th>
+                                <td id="view_buyer_required_quantity"></td>
+                            </tr>
+                            <tr>
+                                <th>Delivery Date:</th>
+                                <td id="view_delivery_date"></td>
+                            </tr>
+                            <tr>
+                                <th>Deal Date:</th>
+                                <td id="view_confirmed_date"></td>
+                            </tr>
+                            <tr>
+                                <th>Status:</th>
+                                <td id="view_status"></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <h6>Loading Details:</h6>
+                        <div class="p-3 bg-light rounded">
+                            <strong>From:</strong> <span id="view_loading_from"></span><br>
+                            <strong>To:</strong> <span id="view_loading_to"></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <h6>Buyer Remark:</h6>
+                        <div class="p-3 bg-light rounded" id="view_buyer_remark"></div>
+                    </div>
+                </div>
+
+                <div class="row mt-3" id="adminDetailsSection" style="display:none;">
+                    <div class="col-12">
+                        <h6>Admin Detail View:</h6>
+                        <div class="p-3 bg-light rounded">
+                            <div><strong>Seller Name:</strong> <span id="view_seller_username"></span></div>
+                            <div><strong>Seller Mobile:</strong> <span id="view_seller_mobile"></span></div>
+                            <div><strong>Seller Email:</strong> <span id="view_seller_email"></span></div>
+                            <hr class="my-2">
+                            <div><strong>Buyer Name:</strong> <span id="view_buyer_username"></span></div>
+                            <div><strong>Buyer Mobile:</strong> <span id="view_buyer_mobile"></span></div>
+                            <div><strong>Buyer Email:</strong> <span id="view_buyer_email"></span></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <h6>Seller Remark:</h6>
+                        <div class="p-3 bg-light rounded" id="view_seller_remark"></div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <h6>Admin Remark:</h6>
+                        <div class="p-3 bg-light rounded" id="view_admin_remark"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Contract Modal (Admin Only) -->
+<div class="modal fade" id="editContractModal" tabindex="-1" aria-labelledby="editContractModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="editContractModalLabel">Edit Contract</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit_contract_id">
+                
+                <div class="mb-3">
+                    <label for="edit_contract_status" class="form-label">Status</label>
+                    <select class="form-select" id="edit_contract_status">
+                        <option value="active">Active</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="edit_admin_remark" class="form-label">Admin Remark</label>
+                    <textarea class="form-control" id="edit_admin_remark" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="updateContractBtn">Update Contract</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .table-hover tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+    .badge {
+        padding: 6px 12px;
+        font-weight: 500;
+    }
+    .contract-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+        min-width: 170px;
+    }
+    .contract-actions .btn {
+        height: 34px;
+        border-radius: 8px;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 78px;
+    }
+</style>
+
+<script>
+const viewContractModal = new bootstrap.Modal(document.getElementById('viewContractModal'));
+const editContractModal = new bootstrap.Modal(document.getElementById('editContractModal'));
+
+function getCsrfToken() {
+    const inputToken = document.querySelector('#csrfTokenForm [name=csrfmiddlewaretoken]')?.value
+        || document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+    if (inputToken) return inputToken;
+    const cookieToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('csrftoken='))
+        ?.split('=')[1];
+    return cookieToken || '';
+}
+
+function showAlert(type, message) {
+    document.getElementById('contractAlertBox').innerHTML = `
+        <div class="alert alert-${type} alert-dismissible fade show">
+            ${message}
+            <button class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+}
+
+async function readApiResponse(res) {
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+        return res.json();
+    }
+    const text = await res.text();
+    return {
+        success: false,
+        message: text ? text.slice(0, 200) : `Request failed (${res.status})`,
+    };
+}
+
+// View Contract
+document.querySelectorAll('.view-contract').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const contractId = this.dataset.contractId;
+
+        fetch(`/api/contracts/${contractId}/`)
+            .then(readApiResponse)
+            .then(data => {
+                if (!data || !data.id) {
+                    throw new Error(data?.message || 'Error loading contract');
+                }
+                document.getElementById('view_contract_id').textContent = data.contract_id;
+                document.getElementById('view_product').textContent = data.product_title;
+                document.getElementById('view_product_id').textContent = data.product_id || '-';
+
+                const buyerCode = data.buyer_unique_id || `BUY-${String(data.buyer_id || '').padStart(6, '0')}`;
+                const sellerCode = `SEL-${String(data.seller_id || '').padStart(6, '0')}`;
+                document.getElementById('view_buyer').textContent = buyerCode;
+                document.getElementById('view_seller').textContent = sellerCode;
+
+                document.getElementById('view_seller_quantity').textContent = data.seller_quantity || '-';
+                document.getElementById('view_deal_amount').innerHTML = `\u20B9${data.deal_amount}/${data.amount_unit}`;
+                document.getElementById('view_quantity').textContent = `${data.deal_quantity} ${data.quantity_unit}`;
+                document.getElementById('view_buyer_offer_amount').textContent = data.buyer_offer_amount ? `\u20B9${data.buyer_offer_amount}` : '-';
+                document.getElementById('view_buyer_required_quantity').textContent = data.buyer_required_quantity || '-';
+                document.getElementById('view_delivery_date').textContent = data.delivery_date || '-';
+                document.getElementById('view_confirmed_date').textContent = data.deal_date || data.confirmed_at;
+
+                document.getElementById('view_loading_from').textContent = data.loading_from || '-';
+                document.getElementById('view_loading_to').textContent = data.loading_to || '-';
+                document.getElementById('view_buyer_remark').textContent = data.buyer_remark || '-';
+                document.getElementById('view_seller_remark').textContent = data.seller_remark || '-';
+                document.getElementById('view_admin_remark').textContent = data.admin_remark || '-';
+
+                const isAdminDetail = !!(data.seller_username || data.buyer_username);
+                document.getElementById('adminDetailsSection').style.display = isAdminDetail ? '' : 'none';
+                if (isAdminDetail) {
+                    document.getElementById('view_seller_username').textContent = data.seller_username || '-';
+                    document.getElementById('view_seller_mobile').textContent = data.seller_mobile || '-';
+                    document.getElementById('view_seller_email').textContent = data.seller_email || '-';
+                    document.getElementById('view_buyer_username').textContent = data.buyer_username || '-';
+                    document.getElementById('view_buyer_mobile').textContent = data.buyer_mobile || '-';
+                    document.getElementById('view_buyer_email').textContent = data.buyer_email || '-';
+                }
+
+                let statusBadge = '';
+                switch(data.status) {
+                    case 'active': statusBadge = '<span class="badge bg-success">Active</span>'; break;
+                    case 'completed': statusBadge = '<span class="badge bg-primary">Completed</span>'; break;
+                    case 'cancelled': statusBadge = '<span class="badge bg-danger">Cancelled</span>'; break;
+                    default: statusBadge = '<span class="badge bg-secondary">Unknown</span>';
+                }
+                document.getElementById('view_status').innerHTML = statusBadge;
+
+                viewContractModal.show();
+            })
+            .catch((err) => showAlert('danger', err.message || 'Error loading contract'));
+    });
+});
+
+// Edit Contract (Admin)
+document.querySelectorAll('.edit-contract').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const contractId = this.dataset.contractId;
+
+        fetch(`/api/contracts/${contractId}/`)
+            .then(readApiResponse)
+            .then(data => {
+                if (!data || !data.id) {
+                    throw new Error(data?.message || 'Error loading contract');
+                }
+                document.getElementById('edit_contract_id').value = contractId;
+                document.getElementById('edit_contract_status').value = data.status;
+                document.getElementById('edit_admin_remark').value = data.admin_remark || '';
+                editContractModal.show();
+            })
+            .catch((err) => showAlert('danger', err.message || 'Error loading contract'));
+    });
+});
+
+// Update Contract
+document.getElementById('updateContractBtn')?.addEventListener('click', function() {
+    const contractId = document.getElementById('edit_contract_id').value;
+    const status = document.getElementById('edit_contract_status').value;
+    const adminRemark = document.getElementById('edit_admin_remark').value;
+
+    fetch(`/api/contracts/${contractId}/update/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+            status: status,
+            admin_remark: adminRemark
+        }),
+    })
+    .then(readApiResponse)
+    .then(data => {
+        if (data.id) {
+            showAlert('success', 'Contract updated successfully');
+            editContractModal.hide();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showAlert('danger', data.message || 'Update failed');
+        }
+    })
+    .catch((err) => showAlert('danger', err.message || 'Error updating contract'));
+});
+
+// Export to Excel
+document.getElementById('exportExcelBtn')?.addEventListener('click', function() {
+    window.location.href = '/api/contracts/export/?' + window.location.search.substring(1);
+});
+</script>
+{% endblock %}

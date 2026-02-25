@@ -1,0 +1,886 @@
+{% extends 'base.html' %}
+
+{% block title %}Buyer + Seller Dashboard{% endblock %}
+
+{% block content %}
+<head>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root{
+      --primary:#0f172a;
+      --muted:#64748b;
+      --muted2:#94a3b8;
+      --card:#ffffff;
+      --bg:#f8fafc;
+      --border:#e2e8f0;
+
+      --blue:#3b82f6;
+      --green:#10b981;
+      --amber:#f59e0b;
+      --red:#ef4444;
+      --purple:#8b5cf6;
+      --cyan:#06b6d4;
+
+      --shadow-md: 0 6px 18px rgba(15,23,42,.08);
+    }
+
+    .bs-wrap{ padding:.25rem 0 1.25rem; }
+
+    .page-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:1rem;
+      flex-wrap:wrap;
+      margin-bottom:1.25rem;
+    }
+    .page-head h2{
+      margin:0;
+      font-weight:950;
+      color:var(--primary);
+      letter-spacing:.2px;
+    }
+    .page-sub{
+      color:var(--muted);
+      margin:.25rem 0 0;
+      font-size:.9rem;
+    }
+
+    /* Toggle pills */
+    .mode-pills{
+      display:flex;
+      gap:.5rem;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .pill{
+      border:1px solid var(--border);
+      background:transparent;
+      border-radius:999px;
+      padding:.45rem .85rem;
+      font-weight:950;
+      font-size:.85rem;
+      color:var(--muted);
+      cursor:pointer;
+      transition:.15s ease;
+      user-select:none;
+    }
+    .pill.active{
+      background:var(--primary);
+      color:#fff;
+      border-color:var(--primary);
+    }
+
+    /* KPI */
+    .kpi-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+      gap:1rem;
+      margin-bottom:1.25rem;
+    }
+    .kpi{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:1.1rem 1.15rem 1rem;
+      box-shadow:var(--shadow-md);
+      position:relative;
+      overflow:hidden;
+      min-height:118px;
+      transition:.2s ease;
+    }
+    .kpi:hover{ transform:translateY(-2px); }
+    .kpi::before{
+      content:"";
+      position:absolute;
+      left:0; top:0; right:0;
+      height:4px;
+      background:linear-gradient(90deg,var(--blue),var(--green));
+    }
+    .kpi.green::before{ background:linear-gradient(90deg,var(--green),#34d399); }
+    .kpi.amber::before{ background:linear-gradient(90deg,var(--amber),#fbbf24); }
+    .kpi.red::before{ background:linear-gradient(90deg,var(--red),#f87171); }
+    .kpi.purple::before{ background:linear-gradient(90deg,var(--purple),#a78bfa); }
+    .kpi.cyan::before{ background:linear-gradient(90deg,var(--cyan),#22d3ee); }
+
+    .kpi-top{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:.75rem;
+      margin-bottom:.65rem;
+    }
+    .kpi-icon{
+      width:46px;height:46px;
+      border-radius:14px;
+      display:flex;align-items:center;justify-content:center;
+      font-size:1.2rem;
+      background:rgba(59,130,246,.10);
+      color:var(--blue);
+    }
+    .kpi.green .kpi-icon{ background:rgba(16,185,129,.10); color:var(--green); }
+    .kpi.amber .kpi-icon{ background:rgba(245,158,11,.12); color:var(--amber); }
+    .kpi.red .kpi-icon{ background:rgba(239,68,68,.10); color:var(--red); }
+    .kpi.purple .kpi-icon{ background:rgba(139,92,246,.10); color:var(--purple); }
+    .kpi.cyan .kpi-icon{ background:rgba(6,182,212,.10); color:var(--cyan); }
+
+    .kpi-title{
+      font-size:.78rem;
+      font-weight:950;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      color:var(--muted);
+      margin:0 0 .25rem;
+    }
+    .kpi-value{
+      font-size:1.75rem;
+      font-weight:950;
+      color:var(--primary);
+      line-height:1.05;
+      margin:0;
+      font-family:"Outfit",system-ui;
+    }
+    .kpi-sub{
+      margin:.4rem 0 0;
+      color:var(--muted);
+      font-size:.85rem;
+    }
+    .kpi-change{
+      margin-top:.4rem;
+      font-size:.82rem;
+      font-weight:950;
+      color:var(--muted);
+      display:flex;
+      align-items:center;
+      gap:.35rem;
+      white-space:nowrap;
+    }
+    .kpi-change.pos{ color:var(--green); }
+    .kpi-change.neg{ color:var(--red); }
+
+    /* Card */
+    .cardx{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:1.15rem;
+      box-shadow:var(--shadow-md);
+      margin-bottom:1rem;
+    }
+    .cardx-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:.75rem;
+      padding-bottom:.85rem;
+      margin-bottom:1rem;
+      border-bottom:1px solid var(--border);
+      flex-wrap:wrap;
+    }
+    .cardx-title{
+      margin:0;
+      font-size:1.02rem;
+      font-weight:950;
+      color:var(--primary);
+    }
+
+    .filters{ display:flex; gap:.5rem; flex-wrap:wrap; }
+    .fbtn{
+      border:1px solid var(--border);
+      background:transparent;
+      border-radius:12px;
+      padding:.45rem .8rem;
+      font-weight:950;
+      font-size:.85rem;
+      color:var(--muted);
+      cursor:pointer;
+      transition:.15s ease;
+      user-select:none;
+    }
+    .fbtn:hover,.fbtn.active{
+      background:var(--blue);
+      color:#fff;
+      border-color:var(--blue);
+    }
+
+    /* Badges */
+    .sb{
+      display:inline-flex; align-items:center; gap:.35rem;
+      padding:.32rem .65rem;
+      border-radius:999px;
+      font-weight:950;
+      font-size:.75rem;
+      white-space:nowrap;
+    }
+    .sb::before{ content:""; width:7px;height:7px;border-radius:50%; background:currentColor; }
+    .sb.ok{ background:rgba(16,185,129,.12); color:var(--green); }
+    .sb.warn{ background:rgba(245,158,11,.12); color:var(--amber); }
+    .sb.bad{ background:rgba(239,68,68,.12); color:var(--red); }
+    .sb.info{ background:rgba(59,130,246,.12); color:var(--blue); }
+    .sb.purp{ background:rgba(139,92,246,.12); color:var(--purple); }
+    .sb.cyan{ background:rgba(6,182,212,.12); color:var(--cyan); }
+
+    /* Tables */
+    .table thead th{
+      white-space:nowrap;
+      font-size:.72rem;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      color:var(--primary);
+      font-weight:950;
+      background:var(--bg);
+      border-top:0;
+    }
+    .table td{ vertical-align:middle; white-space:nowrap; }
+
+    /* Mini list */
+    .mini{ display:flex; flex-direction:column; gap:.75rem; }
+    .mini-row{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:1rem;
+      padding:.8rem;
+      background:var(--bg);
+      border:1px solid var(--border);
+      border-radius:14px;
+    }
+    .mini-row h6{
+      margin:0 0 .15rem;
+      font-weight:950;
+      color:var(--primary);
+      font-size:.92rem;
+    }
+    .mini-row p{ margin:0; color:var(--muted); font-size:.84rem; }
+    .mini-right{
+      text-align:right;
+      color:var(--muted2);
+      font-size:.8rem;
+      white-space:nowrap;
+    }
+    @media(max-width:768px){
+      .mini-row{ flex-direction:column; }
+      .mini-right{ text-align:left; }
+    }
+  </style>
+</head>
+
+<div class="bs-wrap">
+  {% include 'includes/kyc_status_card.html' %}
+  <div class="page-head">
+    <div>
+      <h2>Buyer + Seller Dashboard</h2>
+      <p class="page-sub">Welcome, {{ user.username }}! One view for selling, buying, contracts & transport.</p>
+    </div>
+
+    <div class="mode-pills">
+      <button class="pill active" data-mode="all">All</button>
+      <button class="pill" data-mode="sell">Seller View</button>
+      <button class="pill" data-mode="buy">Buyer View</button>
+      <span class="text-muted small ms-2" id="bsNow"></span>
+    </div>
+  </div>
+
+  <!-- KPIs (ALL) -->
+  <div class="kpi-grid" id="kpiAll">
+    <div class="kpi green">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-scale-balanced"></i></div></div>
+      <div class="kpi-title">Net Balance (MTD)</div>
+      <p class="kpi-value" id="kpiNet">—</p>
+      <div class="kpi-change pos"><i class="fas fa-arrow-up"></i><span id="kpiNetDelta">—</span></div>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-handshake"></i></div></div>
+      <div class="kpi-title">Active Deals</div>
+      <p class="kpi-value" id="kpiDeals">—</p>
+      <p class="kpi-sub">Negotiations: <strong id="kpiNeg">—</strong></p>
+    </div>
+
+    <div class="kpi purple">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-file-signature"></i></div></div>
+      <div class="kpi-title">Active Contracts</div>
+      <p class="kpi-value" id="kpiContracts">—</p>
+      <p class="kpi-sub">Signed this month: <strong id="kpiSigned">—</strong></p>
+    </div>
+
+    <div class="kpi cyan">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-truck"></i></div></div>
+      <div class="kpi-title">In Transit</div>
+      <p class="kpi-value" id="kpiTransit">—</p>
+      <p class="kpi-sub">Avg ETA: <strong id="kpiEta">—</strong></p>
+    </div>
+
+    <div class="kpi amber">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-file-invoice"></i></div></div>
+      <div class="kpi-title">Payments Pending</div>
+      <p class="kpi-value" id="kpiPayPend">—</p>
+      <p class="kpi-sub">₹ pending: <strong id="kpiPayPendAmt">—</strong></p>
+    </div>
+
+    <div class="kpi red">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-triangle-exclamation"></i></div></div>
+      <div class="kpi-title">Issues / Complaints</div>
+      <p class="kpi-value" id="kpiIssues">—</p>
+      <p class="kpi-sub">Open tickets: <strong id="kpiTickets">—</strong></p>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-arrow-trend-up"></i></div></div>
+      <div class="kpi-title">Conversion Rate</div>
+      <p class="kpi-value" id="kpiConv">—</p>
+      <p class="kpi-sub">Avg time-to-close: <strong id="kpiTtc">—</strong></p>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-users"></i></div></div>
+      <div class="kpi-title">Unique Partners</div>
+      <p class="kpi-value" id="kpiPartners">—</p>
+      <p class="kpi-sub">Sellers: <strong id="kpiPartnerS">—</strong> • Buyers: <strong id="kpiPartnerB">—</strong></p>
+    </div>
+  </div>
+
+  <!-- KPIs (SELL) -->
+  <div class="kpi-grid d-none" id="kpiSell">
+    <div class="kpi green">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-rupee-sign"></i></div></div>
+      <div class="kpi-title">Sales Earned (MTD)</div>
+      <p class="kpi-value" id="kpiSellEarn">—</p>
+      <p class="kpi-sub">Top brand: <strong id="kpiSellTopBrand">—</strong></p>
+    </div>
+    <div class="kpi">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-handshake"></i></div></div>
+      <div class="kpi-title">Selling Deals</div>
+      <p class="kpi-value" id="kpiSellDeals">—</p>
+      <p class="kpi-sub">Locked: <strong id="kpiSellLocked">—</strong></p>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-file-contract"></i></div></div>
+      <div class="kpi-title">Sell Contracts</div>
+      <p class="kpi-value" id="kpiSellContracts">—</p>
+      <p class="kpi-sub">In transit: <strong id="kpiSellTransit">—</strong></p>
+    </div>
+    <div class="kpi amber">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-file-invoice-dollar"></i></div></div>
+      <div class="kpi-title">Receivables Pending</div>
+      <p class="kpi-value" id="kpiSellRecv">—</p>
+      <p class="kpi-sub">₹ due: <strong id="kpiSellRecvAmt">—</strong></p>
+    </div>
+  </div>
+
+  <!-- KPIs (BUY) -->
+  <div class="kpi-grid d-none" id="kpiBuy">
+    <div class="kpi cyan">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-rupee-sign"></i></div></div>
+      <div class="kpi-title">Spend (MTD)</div>
+      <p class="kpi-value" id="kpiBuySpend">—</p>
+      <p class="kpi-sub">Top supplier: <strong id="kpiBuyTopSup">—</strong></p>
+    </div>
+    <div class="kpi">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-basket-shopping"></i></div></div>
+      <div class="kpi-title">Buying Orders</div>
+      <p class="kpi-value" id="kpiBuyOrders">—</p>
+      <p class="kpi-sub">Open RFQs: <strong id="kpiBuyRfqs">—</strong></p>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-file-signature"></i></div></div>
+      <div class="kpi-title">Buy Contracts</div>
+      <p class="kpi-value" id="kpiBuyContracts">—</p>
+      <p class="kpi-sub">In transit: <strong id="kpiBuyTransit">—</strong></p>
+    </div>
+    <div class="kpi amber">
+      <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-file-invoice"></i></div></div>
+      <div class="kpi-title">Payables Pending</div>
+      <p class="kpi-value" id="kpiBuyPay">—</p>
+      <p class="kpi-sub">₹ pending: <strong id="kpiBuyPayAmt">—</strong></p>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="row">
+    <div class="col-lg-8">
+      <div class="cardx">
+        <div class="cardx-head">
+          <h4 class="cardx-title">Net Trend (Sell vs Buy)</h4>
+          <div class="filters" id="trendFilters">
+            <button class="fbtn active" data-range="7D">7D</button>
+            <button class="fbtn" data-range="1M">1M</button>
+            <button class="fbtn" data-range="3M">3M</button>
+            <button class="fbtn" data-range="1Y">1Y</button>
+          </div>
+        </div>
+        <canvas id="netTrendChart" height="90"></canvas>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="cardx">
+        <div class="cardx-head"><h4 class="cardx-title">Sales vs Purchases</h4></div>
+        <canvas id="txSplitChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-4">
+      <div class="cardx">
+        <div class="cardx-head"><h4 class="cardx-title">Commodity Mix</h4></div>
+        <canvas id="commodityMixChart" height="200"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="cardx">
+        <div class="cardx-head"><h4 class="cardx-title">Payment Status</h4></div>
+        <canvas id="paymentStatusChart" height="200"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="cardx">
+        <div class="cardx-head"><h4 class="cardx-title">Transport Status</h4></div>
+        <canvas id="transportStatusChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECENT: SELL + BUY -->
+  <div class="row">
+    <div class="col-lg-6">
+      <div class="cardx">
+        <div class="cardx-head"><h4 class="cardx-title">Recent Selling</h4></div>
+        <div class="table-responsive">
+          <table class="table table-striped align-middle">
+            <thead>
+              <tr>
+                <th>Deal/Contract</th>
+                <th>Buyer</th>
+                <th>Commodity</th>
+                <th>Qty</th>
+                <th>Value</th>
+                <th>Payment</th>
+                <th>Transport</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>#CNT-7812</strong></td>
+                <td>Shree Foods</td>
+                <td>Toor Dal</td>
+                <td>80 Qtl</td>
+                <td>₹5,74,400</td>
+                <td><span class="sb warn">Partial</span></td>
+                <td><span class="sb info">In Transit</span></td>
+              </tr>
+              <tr>
+                <td><strong>#DL-5014</strong></td>
+                <td>MNO Industries</td>
+                <td>Moong Dal</td>
+                <td>40 Qtl</td>
+                <td>₹3,29,600</td>
+                <td><span class="sb ok">Paid</span></td>
+                <td><span class="sb ok">Delivered</span></td>
+              </tr>
+              <tr>
+                <td><strong>#DL-5008</strong></td>
+                <td>PQR Buyers</td>
+                <td>Chana Dal</td>
+                <td>55 Qtl</td>
+                <td>₹3,31,100</td>
+                <td><span class="sb bad">Pending</span></td>
+                <td><span class="sb warn">Pickup Due</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="cardx">
+        <div class="cardx-head"><h4 class="cardx-title">Recent Buying</h4></div>
+        <div class="table-responsive">
+          <table class="table table-striped align-middle">
+            <thead>
+              <tr>
+                <th>Order/Contract</th>
+                <th>Seller</th>
+                <th>Commodity</th>
+                <th>Qty</th>
+                <th>Value</th>
+                <th>Payment</th>
+                <th>Transport</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>#ORD-5407</strong></td>
+                <td>GHI Trading</td>
+                <td>Chana Dal</td>
+                <td>65 Qtl</td>
+                <td>₹3,91,300</td>
+                <td><span class="sb bad">Pending</span></td>
+                <td><span class="sb warn">Pickup Due</span></td>
+              </tr>
+              <tr>
+                <td><strong>#ORD-5419</strong></td>
+                <td>DEF Suppliers</td>
+                <td>Moong Dal</td>
+                <td>40 Qtl</td>
+                <td>₹3,29,600</td>
+                <td><span class="sb ok">Paid</span></td>
+                <td><span class="sb ok">Delivered</span></td>
+              </tr>
+              <tr>
+                <td><strong>#ORD-5396</strong></td>
+                <td>JKL Commodities</td>
+                <td>Urad Dal</td>
+                <td>55 Qtl</td>
+                <td>₹4,31,750</td>
+                <td><span class="sb ok">Paid</span></td>
+                <td><span class="sb ok">Delivered</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRANSPORT TRACKING -->
+  <div class="cardx">
+    <div class="cardx-head">
+      <h4 class="cardx-title">Transport Tracking (All)</h4>
+      <div class="text-muted small">Latest LR/Trip updates</div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-striped align-middle">
+        <thead>
+          <tr>
+            <th>LR / Trip</th>
+            <th>Ref</th>
+            <th>Transporter</th>
+            <th>From → To</th>
+            <th>Status</th>
+            <th>Last Scan</th>
+            <th>ETA</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>LR-11208</strong></td>
+            <td>#CNT-7812</td>
+            <td>TransCo Logistics</td>
+            <td>Nagpur → Pune</td>
+            <td><span class="sb info">In Transit</span></td>
+            <td>Feb 03, 11:20</td>
+            <td>Feb 05</td>
+          </tr>
+          <tr>
+            <td><strong>LR-11177</strong></td>
+            <td>#ORD-5388</td>
+            <td>FastMove Carriers</td>
+            <td>Katni → Indore</td>
+            <td><span class="sb info">In Transit</span></td>
+            <td>Feb 03, 09:05</td>
+            <td>Feb 04</td>
+          </tr>
+          <tr>
+            <td><strong>LR-11151</strong></td>
+            <td>#ORD-5407</td>
+            <td>RoadRunner Transport</td>
+            <td>Indore → Bhopal</td>
+            <td><span class="sb warn">Pickup Due</span></td>
+            <td>Feb 02, 18:40</td>
+            <td>Feb 06</td>
+          </tr>
+          <tr>
+            <td><strong>LR-11098</strong></td>
+            <td>#ORD-5419</td>
+            <td>FastMove Carriers</td>
+            <td>Katni → Delhi</td>
+            <td><span class="sb ok">Delivered</span></td>
+            <td>Feb 01, 16:10</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Date/time
+  const now = new Date();
+  document.getElementById("bsNow").textContent =
+    now.toLocaleString("en-IN", { weekday:"short", year:"numeric", month:"short", day:"2-digit", hour:"2-digit", minute:"2-digit" });
+
+  // Dummy data (swap with backend JSON later)
+  const BS_DUMMY = {
+    kpiAll:{
+      net:"₹1.88L",
+      netDelta:"6% vs last month",
+      deals:22,
+      neg:8,
+      contracts:14,
+      signed:5,
+      transit:6,
+      eta:"2.2 days",
+      payPend:7,
+      payPendAmt:"₹3.1L",
+      issues:3,
+      tickets:2,
+      conv:"31%",
+      ttc:"3.9 days",
+      partners:18,
+      partnerS:7,
+      partnerB:11
+    },
+    kpiSell:{
+      earn:"₹7.42L",
+      topBrand:"Katni Gold",
+      deals:13,
+      locked:5,
+      contracts:8,
+      transit:3,
+      recv:4,
+      recvAmt:"₹1.6L"
+    },
+    kpiBuy:{
+      spend:"₹5.54L",
+      topSup:"ABC Traders",
+      orders:9,
+      rfqs:4,
+      contracts:6,
+      transit:3,
+      pay:3,
+      payAmt:"₹1.5L"
+    },
+    ranges:{
+      "7D": { labels:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], sellLakhs:[0.9,1.1,0.6,1.2,1.0,0.8,1.4], buyLakhs:[0.7,0.8,0.5,0.9,0.85,0.6,1.0] },
+      "1M": { labels:["W1","W2","W3","W4"], sellLakhs:[2.1,1.8,1.9,2.2], buyLakhs:[1.6,1.4,1.3,1.2] },
+      "3M": { labels:["Nov","Dec","Jan"], sellLakhs:[5.6,6.4,7.42], buyLakhs:[4.8,5.1,5.54] },
+      "1Y": { labels:["Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan"], sellLakhs:[2.4,2.6,2.8,3.1,3.3,3.5,3.9,4.2,4.9,5.6,6.4,7.42], buyLakhs:[2.1,2.2,2.4,2.6,2.8,3.0,3.2,3.5,4.1,4.8,5.1,5.54] }
+    },
+    txSplit:{ labels:["Sales","Purchases"], values:[45,33] },
+    commodityMix:{ labels:["Toor","Chana","Moong","Urad","Masoor","Others"], volumeQtl:[260,190,140,120,155,75] },
+    payStatus:{ labels:["Paid","Partial","Pending"], values:[18,9,7] },
+    transport:{ labels:["Pickup Due","In Transit","Delivered","Delayed"], values:[3,6,16,1] }
+  };
+
+  // Mount KPI helpers
+  const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+
+  (function mountAll(){
+    const k=BS_DUMMY.kpiAll;
+    set("kpiNet",k.net);
+    set("kpiNetDelta",k.netDelta);
+    set("kpiDeals",k.deals);
+    set("kpiNeg",k.neg);
+    set("kpiContracts",k.contracts);
+    set("kpiSigned",k.signed);
+    set("kpiTransit",k.transit);
+    set("kpiEta",k.eta);
+    set("kpiPayPend",k.payPend);
+    set("kpiPayPendAmt",k.payPendAmt);
+    set("kpiIssues",k.issues);
+    set("kpiTickets",k.tickets);
+    set("kpiConv",k.conv);
+    set("kpiTtc",k.ttc);
+    set("kpiPartners",k.partners);
+    set("kpiPartnerS",k.partnerS);
+    set("kpiPartnerB",k.partnerB);
+  })();
+
+  (function mountSell(){
+    const k=BS_DUMMY.kpiSell;
+    set("kpiSellEarn",k.earn);
+    set("kpiSellTopBrand",k.topBrand);
+    set("kpiSellDeals",k.deals);
+    set("kpiSellLocked",k.locked);
+    set("kpiSellContracts",k.contracts);
+    set("kpiSellTransit",k.transit);
+    set("kpiSellRecv",k.recv);
+    set("kpiSellRecvAmt",k.recvAmt);
+  })();
+
+  (function mountBuy(){
+    const k=BS_DUMMY.kpiBuy;
+    set("kpiBuySpend",k.spend);
+    set("kpiBuyTopSup",k.topSup);
+    set("kpiBuyOrders",k.orders);
+    set("kpiBuyRfqs",k.rfqs);
+    set("kpiBuyContracts",k.contracts);
+    set("kpiBuyTransit",k.transit);
+    set("kpiBuyPay",k.pay);
+    set("kpiBuyPayAmt",k.payAmt);
+  })();
+
+  const makeChart=(ctx,cfg)=>new Chart(ctx,cfg);
+
+  // Net trend chart (sell vs buy)
+  let netChart;
+  function initNet(rangeKey="7D"){
+    const r=BS_DUMMY.ranges[rangeKey];
+    const ctx=document.getElementById("netTrendChart").getContext("2d");
+    netChart = makeChart(ctx,{
+      type:"line",
+      data:{
+        labels:r.labels,
+        datasets:[
+          { label:"Sales (₹ Lakhs)", data:r.sellLakhs, borderColor:"#10b981", backgroundColor:"rgba(16,185,129,.12)", borderWidth:3, tension:.35, fill:true },
+          { label:"Purchases (₹ Lakhs)", data:r.buyLakhs, borderColor:"#3b82f6", backgroundColor:"rgba(59,130,246,.12)", borderWidth:3, tension:.35, fill:true }
+        ]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:true,
+        plugins:{
+          legend:{ position:"top", labels:{ usePointStyle:true, padding:16, font:{ size:12, weight:"950" } } },
+          tooltip:{ backgroundColor:"#0f172a", padding:12 }
+        },
+        scales:{
+          y:{ beginAtZero:true, grid:{ color:"#e2e8f0" }, title:{ display:true, text:"₹ Lakhs" } },
+          x:{ grid:{ display:false } }
+        }
+      }
+    });
+  }
+  initNet("7D");
+
+  // Sales vs Purchases
+  makeChart(document.getElementById("txSplitChart").getContext("2d"),{
+    type:"doughnut",
+    data:{
+      labels:BS_DUMMY.txSplit.labels,
+      datasets:[{
+        data:BS_DUMMY.txSplit.values,
+        backgroundColor:["#10b981","#3b82f6"],
+        borderWidth:0
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:true,
+      plugins:{
+        legend:{ position:"bottom", labels:{ usePointStyle:true, padding:14, font:{ size:12, weight:"950" } } },
+        tooltip:{ backgroundColor:"#0f172a", padding:12 }
+      }
+    }
+  });
+
+  // Commodity Mix
+  makeChart(document.getElementById("commodityMixChart").getContext("2d"),{
+    type:"polarArea",
+    data:{
+      labels:BS_DUMMY.commodityMix.labels,
+      datasets:[{
+        data:BS_DUMMY.commodityMix.volumeQtl,
+        backgroundColor:[
+          "rgba(16,185,129,.75)",
+          "rgba(59,130,246,.75)",
+          "rgba(245,158,11,.75)",
+          "rgba(139,92,246,.75)",
+          "rgba(6,182,212,.75)",
+          "rgba(100,116,139,.65)"
+        ],
+        borderWidth:0
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:true,
+      plugins:{
+        legend:{ position:"bottom", labels:{ usePointStyle:true, padding:14, font:{ size:12, weight:"950" } } },
+        tooltip:{ backgroundColor:"#0f172a", padding:12 }
+      }
+    }
+  });
+
+  // Payment Status
+  makeChart(document.getElementById("paymentStatusChart").getContext("2d"),{
+    type:"doughnut",
+    data:{
+      labels:BS_DUMMY.payStatus.labels,
+      datasets:[{
+        data:BS_DUMMY.payStatus.values,
+        backgroundColor:["#10b981","#f59e0b","#ef4444"],
+        borderWidth:0
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:true,
+      plugins:{
+        legend:{ position:"bottom", labels:{ usePointStyle:true, padding:14, font:{ size:12, weight:"950" } } },
+        tooltip:{ backgroundColor:"#0f172a", padding:12 }
+      }
+    }
+  });
+
+  // Transport Status
+  makeChart(document.getElementById("transportStatusChart").getContext("2d"),{
+    type:"doughnut",
+    data:{
+      labels:BS_DUMMY.transport.labels,
+      datasets:[{
+        data:BS_DUMMY.transport.values,
+        backgroundColor:["#f59e0b","#3b82f6","#10b981","#ef4444"],
+        borderWidth:0
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:true,
+      plugins:{
+        legend:{ position:"bottom", labels:{ usePointStyle:true, padding:14, font:{ size:12, weight:"950" } } },
+        tooltip:{ backgroundColor:"#0f172a", padding:12 }
+      }
+    }
+  });
+
+  // Trend filters
+  document.querySelectorAll("#trendFilters .fbtn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll("#trendFilters .fbtn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+
+      const range=btn.dataset.range;
+      const r=BS_DUMMY.ranges[range];
+      if(!r || !netChart) return;
+
+      netChart.data.labels=r.labels;
+      netChart.data.datasets[0].data=r.sellLakhs;
+      netChart.data.datasets[1].data=r.buyLakhs;
+      netChart.update();
+    });
+  });
+
+  // Mode pills (show/hide KPI groups)
+  const pills=document.querySelectorAll(".pill");
+  const kAll=document.getElementById("kpiAll");
+  const kSell=document.getElementById("kpiSell");
+  const kBuy=document.getElementById("kpiBuy");
+
+  function setMode(mode){
+    pills.forEach(p=>p.classList.remove("active"));
+    document.querySelector(`.pill[data-mode="${mode}"]`).classList.add("active");
+
+    // default: hide all
+    kAll.classList.add("d-none");
+    kSell.classList.add("d-none");
+    kBuy.classList.add("d-none");
+
+    if(mode==="all") kAll.classList.remove("d-none");
+    if(mode==="sell") kSell.classList.remove("d-none");
+    if(mode==="buy") kBuy.classList.remove("d-none");
+  }
+
+  pills.forEach(p=>{
+    p.addEventListener("click", ()=>setMode(p.dataset.mode));
+  });
+</script>
+{% endblock %}

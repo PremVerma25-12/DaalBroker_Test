@@ -1,0 +1,95 @@
+/* style.css */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+:root {
+    /* Yellow Theme (Crextio inspired) */
+    --primary: #FCD34D;       /* Sunny Yellow */
+    --primary-light: #FEF3C7; /* Pale Yellow */
+    --dark: #18181b;          /* Deep Charcoal/Black */
+    --dark-surface: #27272a;
+    --body-bg: #F9FAFB;       /* Very soft gray/white */
+    --surface: #FFFFFF;
+    --text-main: #18181b;
+    --text-muted: #9CA3AF;
+    --border-color: #F3F4F6;
+    
+    /* Global Shapes */
+    --radius-lg: 24px;
+    --radius-md: 16px;
+    --radius-sm: 12px;
+    --shadow-soft: 0 10px 40px -10px rgba(0,0,0,0.05);
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--body-bg);
+    color: var(--text-main);
+    overflow-x: hidden;
+}
+
+/* Card Styling */
+.card-box {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid white;
+    box-shadow: var(--shadow-soft);
+    padding: 24px;
+    height: 100%;
+    transition: transform 0.2s ease;
+}
+
+.card-box:hover {
+    transform: translateY(-2px);
+}
+
+/* Dark Card Variant */
+.card-box.dark {
+    background: var(--dark);
+    color: white;
+}
+.card-box.dark h6, .card-box.dark p, .card-box.dark small {
+    color: #e4e4e7;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 { font-weight: 600; }
+.text-primary-theme { color: #d97706; } /* Darker yellow for text */
+
+/* Icon Styling */
+.icon-box {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 20px;
+}
+.icon-box.rounded-box { border-radius: 12px; }
+
+/* Buttons */
+.btn-theme {
+    background-color: var(--dark);
+    color: var(--primary);
+    border-radius: 30px;
+    padding: 10px 24px;
+    font-weight: 500;
+    border: none;
+}
+.btn-theme:hover {
+    background-color: #000;
+    color: var(--primary);
+}
+
+.btn-theme-outline {
+    background-color: transparent;
+    border: 1px solid var(--dark);
+    color: var(--dark);
+    border-radius: 30px;
+    padding: 10px 24px;
+    font-weight: 500;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 10px; }

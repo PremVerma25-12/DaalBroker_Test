@@ -1,0 +1,343 @@
+<header class="top-header">
+  <div style="display:flex; flex-direction:column; gap:6px; padding:12px 16px; background:#f8f9fa; border-radius:8px;">
+
+    <div style="font-size:20px; font-weight:600; color:#1f2937;">
+        Welcome {{ user.first_name }} {{ user.last_name }}
+    </div>
+
+    <div id="greetingText" style="font-size:15px; font-weight:500; color:#6b7280;">
+        Loading greeting...
+    </div>
+  </div>
+  <div class="header-icons d-flex gap-2">
+    <button class="btn-icon"><i class="fa-regular fa-bell"></i></button>
+    <button class="btn-icon position-relative">
+      <i class="fa-regular fa-comment-dots"></i>
+      <span
+        class="position-absolute top-0 start-100 translate-middle p-1 bg-warning border border-light rounded-circle"
+        style="width: 8px; height: 8px"
+      ></span>
+    </button>
+    <button class="btn-icon">
+      <i class="fa-solid fa-magnifying-glass"></i>
+    </button>
+
+    <div class="d-flex align-items-center gap-2 ms-2 dropdown">
+        <input type="file" id="profileImageInput" accept="image/*" class="d-none">
+        <img
+          id="headerProfileImage"
+          src="{% if user.profile_image %}{{ user.profile_image.url }}{% else %}https://i.pravatar.cc/150?u={{ user.id }}{% endif %}"
+          alt="User"
+          class="rounded-circle"
+          width="40"
+          height="40"
+          style="object-fit: cover; cursor: pointer;"
+          title="Click to upload profile picture"
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+        >
+        <div class="d-none d-lg-block dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" style="cursor: pointer;">
+
+            <p class="mb-0 fw-bold" style="font-size: 0.9rem;">{{ user.first_name }} {{ user.last_name }}</p>
+            <small class="text-muted" style="font-size: 0.75rem;">{{ user.get_role_display|default:user.role }}</small>
+            <br>
+            <small class="text-muted" id="headerDateTime" style="font-size: 0.72rem;"></small>
+        </div>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#editProfileModal"><i class="fa-solid fa-user-edit"></i> Edit Profile</a></li>
+            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#changePasswordModal"><i class="fa-solid fa-key"></i> Change Password</a></li>
+        </ul>
+    </div>
+  </div>
+</header>
+<!-- Edit Profile Modal -->
+<div class="modal fade" id="editProfileModal" tabindex="-1" aria-labelledby="editProfileModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content modal-content-rounded">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editProfileModalLabel"><i class="fa-solid fa-user-edit"></i> Edit Profile</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editProfileForm">
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="first_name" class="form-label">First Name</label>
+              <input type="text" class="form-control" id="first_name" name="first_name" value="{{ user.first_name|default:'' }}">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="last_name" class="form-label">Last Name</label>
+              <input type="text" class="form-control" id="last_name" name="last_name" value="{{ user.last_name|default:'' }}">
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="email" class="form-label">Email</label>
+              <input type="email" class="form-control" id="email" name="email" value="{{ user.email|default:'' }}">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="mobile" class="form-label">Mobile</label>
+              <input type="text" class="form-control" id="mobile" name="mobile" value="{{ user.mobile|default:'' }}">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label for="profile_image" class="form-label">Profile Image</label>
+            <input type="file" class="form-control" id="profile_image" name="profile_image" accept="image/*">
+          </div>
+          {% if user.role == 'admin' %}
+          <!-- Additional fields for Super Admin -->
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="pan_number" class="form-label">PAN Number</label>
+              <input type="text" class="form-control" id="pan_number" name="pan_number" value="{{ user.pan_number|default:'' }}">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="gst_number" class="form-label">GST Number</label>
+              <input type="text" class="form-control" id="gst_number" name="gst_number" value="{{ user.gst_number|default:'' }}">
+            </div>
+          </div>
+          {% endif %}
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-dal" id="saveProfileBtn">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+<div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content modal-content-rounded">
+      <div class="modal-header">
+        <h5 class="modal-title" id="changePasswordModalLabel"><i class="fa-solid fa-key"></i> Change Password</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="changePasswordForm">
+          <div class="mb-3">
+            <label for="old_password" class="form-label">Old Password</label>
+            <input type="password" class="form-control" id="old_password" name="old_password" required>
+          </div>
+          <div class="mb-3">
+            <label for="new_password" class="form-label">New Password</label>
+            <input type="password" class="form-control" id="new_password" name="new_password" required>
+          </div>
+          <div class="mb-3">
+            <label for="confirm_password" class="form-label">Confirm New Password</label>
+            <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-dal" id="changePasswordBtn">Change Password</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  const hour = new Date().getHours();
+    let greeting = "";
+
+    if (hour >= 4 && hour < 12) {
+        greeting = "Very Good Morning";
+    } 
+    else if (hour >= 12 && hour < 16) {
+        greeting = "Very Good Afternoon";
+    } 
+    else if (hour >= 16 && hour < 20) {
+        greeting = "Very Good Evening";
+    } 
+    else {
+        greeting = "Very Good Night";
+    }
+
+    document.getElementById("greetingText").innerText = greeting;
+  (function () {
+    const profileImage = document.getElementById('headerProfileImage');
+    const profileInput = document.getElementById('profileImageInput');
+    const headerDateTime = document.getElementById('headerDateTime');
+    if (!profileImage || !profileInput) return;
+
+    function getCsrfToken() {
+      const cookie = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
+      return cookie ? cookie.split('=')[1] : '';
+    }
+
+    function updateHeaderDateTime() {
+      if (!headerDateTime) return;
+      const now = new Date();
+      const formatted = now.toLocaleString('en-IN', {
+        weekday: 'short',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+      headerDateTime.textContent = formatted;
+    }
+
+    profileImage.addEventListener('click', function () {
+      profileInput.click();
+    });
+
+    profileInput.addEventListener('change', function () {
+      const file = profileInput.files && profileInput.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('profile_image', file);
+
+      fetch('/api/user/profile-image/', {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCsrfToken(),
+        },
+        body: formData,
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (!data.success) {
+            alert(data.message || 'Failed to upload profile image.');
+            return;
+          }
+          if (data.profile_image_url) {
+            profileImage.src = data.profile_image_url + '?t=' + Date.now();
+          }
+        })
+        .catch(() => {
+          alert('Failed to upload profile image.');
+        })
+        .finally(() => {
+          profileInput.value = '';
+        });
+    });
+
+    updateHeaderDateTime();
+    setInterval(updateHeaderDateTime, 1000);
+    // Handle Edit Profile
+    const saveProfileBtn = document.getElementById('saveProfileBtn');
+    const editProfileForm = document.getElementById('editProfileForm');
+
+    if (saveProfileBtn && editProfileForm) {
+        saveProfileBtn.addEventListener('click', async function () {
+            const formData = new FormData(editProfileForm);
+            try {
+                const response = await window.authFetch('/api/profile/update/', {
+                    method: 'PATCH',
+                    body: formData
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success',
+                        text: data.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    bootstrap.Modal.getInstance(document.getElementById('editProfileModal')).hide();
+                    // Update header profile image if changed
+                    const profileImage = document.getElementById('headerProfileImage');
+                    if (data.data && data.data.profile_image) {
+                        profileImage.src = data.data.profile_image + '?t=' + Date.now();
+                    }
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: Object.values(data).flat().join('\n')
+                    });
+                }
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to update profile.'
+                });
+            }
+        });
+    }
+
+    // Handle Change Password
+    const changePasswordBtn = document.getElementById('changePasswordBtn');
+    const changePasswordForm = document.getElementById('changePasswordForm');
+
+    if (changePasswordBtn && changePasswordForm) {
+        changePasswordBtn.addEventListener('click', async function () {
+            const formData = new FormData(changePasswordForm);
+            const data = Object.fromEntries(formData.entries());
+            try {
+                const response = await window.authFetch('/api/auth/change-password/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success',
+                        text: result.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide();
+                    changePasswordForm.reset();
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: Object.values(result).flat().join('\n')
+                    });
+                }
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to change password.'
+                });
+            }
+        });
+    }
+  })();
+</script>
+
+
+
+
+<!-- 
+
+<header class="top-header">
+  <div class="breadcrumb-container">
+    <span class="breadcrumb-text">Welcome {{ user.username }}</span>
+  </div>
+
+  <div class="header-icons d-flex gap-2">
+    <button class="btn-icon"><i class="fa-regular fa-bell"></i></button>
+    <button class="btn-icon position-relative">
+      <i class="fa-regular fa-comment-dots"></i>
+      <span
+        class="position-absolute top-0 start-100 translate-middle p-1 bg-warning border border-light rounded-circle"
+        style="width: 8px; height: 8px"
+      ></span>
+    </button>
+    <button class="btn-icon">
+      <i class="fa-solid fa-magnifying-glass"></i>
+    </button>
+
+    <div class="d-flex align-items-center gap-2 ms-2">
+        <img src="https://i.pravatar.cc/150?img=12" alt="User" class="rounded-circle" width="40" height="40">
+        <div class="d-none d-lg-block">
+            <p class="mb-0 fw-bold" style="font-size: 0.9rem;">{{ user.username }}</p>
+            <small class="text-muted" style="font-size: 0.75rem;">Admin</small>
+        </div>
+    </div>
+  </div>
+</header>
+ -->

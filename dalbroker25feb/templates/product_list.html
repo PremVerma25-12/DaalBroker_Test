@@ -1,0 +1,304 @@
+{% extends 'base.html' %}
+
+{% block title %}Product Management{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <nav class="breadcrumb-custom" aria-label="breadcrumb">
+        <a href="/dashboard/">Dashboard</a>
+        <i class="separator fa fa-chevron-right"></i>
+        <a href="#">Product</a>
+        <i class="separator fa fa-chevron-right"></i>
+        <span class="active">Product List</span>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center">
+        <h1 class="page-title">Product List</h1>
+        {% if is_seller_user or is_admin_user %}
+        <a href="{% url 'product_create' %}" class="btn btn-primary">+ Add Product</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if messages %}
+<div class="mb-3">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<style>
+.product-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-start;
+}
+.product-actions form {
+    margin: 0;
+    display: inline-flex;
+}
+.product-actions .btn,
+.product-actions .form-control-sm {
+    height: 36px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+.stock-form {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: nowrap;
+}
+.stock-form input {
+    width: 92px;
+}
+</style>
+
+<form method="get" class="card p-3 mb-3">
+    <div class="row g-2 align-items-center">
+        <div class="col-md-3">
+            <input type="text" name="search" class="form-control" placeholder="Search title/category/seller..." value="{{ filters.search|default:'' }}">
+        </div>
+        <div class="col-md-2">
+            <select name="category" class="form-select">
+                <option value="all" {% if filters.category == 'all' %}selected{% endif %}>All Categories</option>
+                {% for category in categories %}
+                <option value="{{ category.id }}" {% if filters.category == category.id|stringformat:"s" %}selected{% endif %}>{{ category.category_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% if is_admin_user %}
+        <div class="col-md-2">
+            <select name="seller" class="form-select">
+                <option value="all" {% if filters.seller == 'all' %}selected{% endif %}>All Sellers</option>
+                {% for seller in sellers %}
+                <option value="{{ seller.id }}" {% if filters.seller == seller.id|stringformat:"s" %}selected{% endif %}>{{ seller.username }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <div class="{% if is_admin_user %}col-md-2{% else %}col-md-3{% endif %}">
+            <select name="product_status" class="form-select">
+                <option value="all" {% if filters.product_status == 'all' %}selected{% endif %}>All Status</option>
+                <option value="active" {% if filters.product_status == 'active' %}selected{% endif %}>Active</option>
+                <option value="inactive" {% if filters.product_status == 'inactive' %}selected{% endif %}>Inactive</option>
+                <option value="partially_sold" {% if filters.product_status == 'partially_sold' %}selected{% endif %}>Partially Sold</option>
+                <option value="seller_confirmed" {% if filters.product_status == 'seller_confirmed' %}selected{% endif %}>Seller Confirmed</option>
+                <option value="deal_confirmed" {% if filters.product_status == 'deal_confirmed' %}selected{% endif %}>Deal Confirmed</option>
+                <option value="out_of_stock" {% if filters.product_status == 'out_of_stock' %}selected{% endif %}>Out of Stock</option>
+                <option value="sold" {% if filters.product_status == 'sold' %}selected{% endif %}>Sold</option>
+            </select>
+        </div>
+        <div class="{% if is_admin_user %}col-md-3{% else %}col-md-4{% endif %} d-flex gap-2">
+            <button type="submit" class="btn btn-primary w-100">Apply</button>
+            <a href="{% url 'product_list' %}" class="btn btn-outline-secondary w-100">Reset</a>
+        </div>
+    </div>
+</form>
+
+{% if edit_product and is_seller_user or edit_product and is_admin_user %}
+<div class="card p-3 mb-3">
+    <h5 class="mb-3">Edit Product: {{ edit_product.title }}</h5>
+    <form method="post" action="{% url 'product_update_ajax' edit_product.id %}">
+        {% csrf_token %}
+        <div class="row g-2">
+            <div class="col-md-4"><label class="form-label">Title *</label><input type="text" name="title" class="form-control" value="{{ edit_product.title }}" required></div>
+            <div class="col-md-4">
+                <label class="form-label">Category *</label>
+                <select name="category_id" class="form-select" required>
+                    {% for category in all_categories %}
+                    <option value="{{ category.id }}" {% if edit_product.category_id == category.id %}selected{% endif %}>{{ category.get_full_path }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Seller {% if is_admin_user %}*{% endif %}</label>
+                <select name="seller_id" class="form-select" {% if is_admin_user %}required{% else %}disabled{% endif %}>
+                    {% for seller in sellers %}
+                    <option value="{{ seller.id }}" {% if edit_product.seller_id == seller.id %}selected{% endif %}>{{ seller.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3"><label class="form-label">Rate *</label><input type="number" name="amount" class="form-control" step="0.01" min="0.01" value="{{ edit_product.amount }}" required></div>
+            <div class="col-md-3">
+                <label class="form-label">Rate Unit *</label>
+                <select name="amount_unit" class="form-select" required>
+                    <option value="kg" {% if edit_product.amount_unit == 'kg' %}selected{% endif %}>KG</option>
+                    <option value="ton" {% if edit_product.amount_unit == 'ton' %}selected{% endif %}>TON</option>
+                    <option value="qtl" {% if edit_product.amount_unit == 'qtl' %}selected{% endif %}>QTL</option>
+                </select>
+            </div>
+            <div class="col-md-3"><label class="form-label">Loading From *</label><input type="text" name="loading_from" class="form-control" value="{{ edit_product.loading_from|default:'' }}" required></div>
+            <div class="col-md-3"><label class="form-label">Loading To *</label><input type="text" name="loading_to" class="form-control" value="{{ edit_product.loading_to|default:'' }}" required></div>
+            <div class="col-md-12 d-flex justify-content-end gap-2">
+                <a href="{% url 'product_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Update Product</button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<div class="table-responsive card">
+    <table class="table table-hover align-middle mb-0">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Category</th>
+                <th>Seller</th>
+                <th>Amount</th>
+                <th>Stock</th>
+                <th>Status</th>
+                <th>Interests</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in products %}
+            <tr>
+                <td>{{ product.title }}</td>
+                <td>{{ product.category.category_name }}</td>
+                <td>{{ product.seller.username }}</td>
+                <td>&#8377;{{ product.amount }}/{{ product.amount_unit|upper }}</td>
+                <td>
+                    {% if product.deal_status == 'out_of_stock' or product.status == 'out_of_stock' %}
+                    0.00 {{ product.quantity_unit|upper }}
+                    {% else %}
+                    {{ product.remaining_quantity|default:product.original_quantity|floatformat:2 }} {{ product.quantity_unit|upper }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if product.deal_status == 'out_of_stock' %}
+                    <span class="badge bg-secondary">Out of Stock</span>
+                    {% elif product.deal_status == 'partially_sold' %}
+                    <span class="badge bg-info">Partially Sold</span>
+                    {% elif product.deal_status == 'seller_confirmed' %}
+                    <span class="badge bg-warning text-dark">Seller Confirmed</span>
+                    {% elif product.deal_status == 'deal_confirmed' %}
+                    <span class="badge bg-primary">Deal Confirmed</span>
+                    {% elif product.is_active %}
+                    <span class="badge bg-success">Active</span>
+                    {% else %}
+                    <span class="badge bg-dark">Inactive</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'product_list' %}?manage_product={{ product.id }}#manage-interest-block" class="btn btn-sm btn-outline-primary">
+                        {{ product.interested_count|default:0 }}
+                    </a>
+                </td>
+                <td>
+                    <div class="product-actions">
+                        <a class="btn btn-sm btn-primary" href="{% url 'product_list' %}?manage_product={{ product.id }}#manage-interest-block">Manage</a>
+                        {% if is_seller_user or is_admin_user %}
+                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'product_list' %}?edit_product={{ product.id }}">Edit</a>
+                        <form method="post" action="{% url 'product_delete_ajax' product.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                        </form>
+                        <form method="post" action="{% url 'product_toggle_ajax' product.id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="is_active" value="{% if product.is_active %}0{% else %}1{% endif %}">
+                            <button type="submit" class="btn btn-sm btn-outline-dark">{% if product.is_active %}Hide{% else %}Show{% endif %}</button>
+                        </form>
+                        <form method="post" action="{% url 'product_update_stock_ajax' product.id %}" class="stock-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="mode" value="add">
+                            <input type="number" name="quantity" class="form-control form-control-sm" min="0.01" step="0.01" placeholder="Add Stock">
+                            <button type="submit" class="btn btn-sm btn-warning">Stock</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="8" class="text-center py-4">No products found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% include '_pagination.html' %}
+
+{% if manage_product %}
+<div class="card p-3 mt-3" id="manage-interest-block">
+    <h5 class="mb-2">Manage Product: {{ manage_product.title }}</h5>
+    <p class="mb-3"><strong>Available:</strong>
+        {% if manage_product.deal_status == 'out_of_stock' or manage_product.status == 'out_of_stock' %}
+        0.00 {{ manage_product.quantity_unit|upper }}
+        {% else %}
+        {{ manage_product.remaining_quantity|default:manage_product.original_quantity|floatformat:2 }} {{ manage_product.quantity_unit|upper }}
+        {% endif %}
+    </p>
+
+    {% if is_buyer_user %}
+    <form method="post" action="{% url 'product_toggle_interest_ajax' manage_product.id %}" class="row g-2 mb-3">
+        {% csrf_token %}
+        <div class="col-md-3"><label class="form-label">Interested Price *</label><input type="number" step="0.01" min="0.01" name="buyer_offered_amount" class="form-control" required></div>
+        <div class="col-md-3"><label class="form-label">Required Quantity *</label><input type="number" step="0.01" min="0.01" name="buyer_required_quantity" class="form-control" required></div>
+        <div class="col-md-3"><label class="form-label">Loading From *</label><input type="text" name="loading_from" class="form-control" required></div>
+        <div class="col-md-3"><label class="form-label">Loading To *</label><input type="text" name="loading_to" class="form-control" required></div>
+        <div class="col-md-3"><label class="form-label">Delivery Date *</label><input type="date" name="delivery_date" class="form-control" required></div>
+        <div class="col-md-6"><label class="form-label">Condition (Remark)</label><input type="text" name="buyer_remark" class="form-control"></div>
+        <div class="col-md-3 d-flex align-items-end"><button type="submit" class="btn btn-primary w-100">Submit Offer</button></div>
+    </form>
+    {% endif %}
+
+    <div class="table-responsive">
+        <table class="table table-sm table-hover">
+            <thead>
+                <tr>
+                    <th>Interested Code</th>
+                    <th>Interested Amount</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for interest in manage_interests %}
+                <tr>
+                    <td>{{ interest.buyer_display_id }}</td>
+                    <td>&#8377;{{ interest.buyer_offered_amount }}</td>
+                    <td>{{ interest.status }}</td>
+                    <td>
+                        <div class="d-flex flex-wrap gap-1">
+                            {% if interest.status == 'interested' and is_seller_user %}
+                            <form method="post" action="{% url 'product_accept_buyer_ajax' manage_product.id %}" class="d-flex gap-1">
+                                {% csrf_token %}
+                                <input type="hidden" name="interest_id" value="{{ interest.id }}">
+                                <input type="text" name="seller_remark" class="form-control form-control-sm" placeholder="Remark">
+                                <button type="submit" class="btn btn-sm btn-success">Accept</button>
+                            </form>
+                            <form method="post" action="{% url 'product_reject_buyer_ajax' manage_product.id %}" class="d-flex gap-1">
+                                {% csrf_token %}
+                                <input type="hidden" name="interest_id" value="{{ interest.id }}">
+                                <input type="text" name="seller_remark" class="form-control form-control-sm" placeholder="Remark">
+                                <button type="submit" class="btn btn-sm btn-danger">Reject</button>
+                            </form>
+                            {% endif %}
+                            {% if is_admin_user and interest.status == 'seller_confirmed' %}
+                            <form method="post" action="{% url 'product_confirm_deal_ajax' manage_product.id %}" class="d-flex gap-1">
+                                {% csrf_token %}
+                                <input type="hidden" name="interest_id" value="{{ interest.id }}">
+                                <input type="text" name="admin_remark" class="form-control form-control-sm" placeholder="Admin remark">
+                                <button type="submit" class="btn btn-sm btn-primary">Confirm Deal</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="text-center">No interests found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

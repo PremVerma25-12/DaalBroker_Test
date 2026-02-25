@@ -1,0 +1,321 @@
+<!-- Dynamic Cascading Category Selector Component -->
+<div class="category-selector" id="{{ selector_id|default:'categorySelector' }}">
+    <div class="row">
+        <div class="col-md-12">
+            <label class="form-label">Category Selection</label>
+            <div class="cascading-dropdowns">
+                <!-- Root Category Dropdown -->
+                <div class="dropdown-level mb-2">
+                    <select class="form-control category-level-select" data-level="0" id="root_category_{{ selector_id|default:'categorySelector' }}">
+                        <option value="">Select Category</option>
+                    </select>
+                </div>
+                
+                <!-- Dynamic sub-category dropdowns will be inserted here -->
+                <div id="sub_dropdowns_{{ selector_id|default:'categorySelector' }}"></div>
+            </div>
+            
+            <!-- Hidden field to store final selected category ID -->
+            <input type="hidden" id="final_category_id_{{ selector_id|default:'categorySelector' }}" name="{{ field_name|default:'category' }}" value="{{ selected_value|default:'' }}">
+            
+            <!-- Display selected category path -->
+            <div class="selected-path mt-2">
+                <small class="text-muted">
+                    Selected: <span id="selected_path_{{ selector_id|default:'categorySelector' }}">None</span>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Category Selector Component - Updated for Hierarchical Support
+class CategorySelector {
+    constructor(selectorId, options = {}) {
+        this.selectorId = selectorId;
+        this.options = {
+            apiUrl: '/api/categories/tree/',
+            childrenApiUrl: '/api/categories/{id}/children/',
+            searchApiUrl: '/api/categories/search/',
+            maxDepth: options.maxDepth || 10,
+            allowEmpty: options.allowEmpty || false,
+            ...options
+        };
+        
+        this.selectedPath = [];
+        this.categoryData = new Map();
+        
+        this.init();
+    }
+    
+    init() {
+        this.loadRootCategories();
+        this.bindEvents();
+    }
+    
+    loadRootCategories() {
+        fetch(this.options.apiUrl)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    this.populateRootDropdown(data.tree);
+                    this.cacheCategoryData(data.tree);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading root categories:', error);
+            });
+    }
+    
+    populateRootDropdown(categories) {
+        const rootSelect = document.getElementById(`root_category_${this.selectorId}`);
+        rootSelect.innerHTML = '<option value="">Select Category</option>';
+        
+        categories.forEach(category => {
+            const option = new Option(category.category_name, category.id);
+            rootSelect.add(option);
+        });
+    }
+    
+    cacheCategoryData(categories, parentId = null) {
+        categories.forEach(category => {
+            this.categoryData.set(category.id, {
+                ...category,
+                parentId: parentId
+            });
+            
+            if (category.children && category.children.length > 0) {
+                this.cacheCategoryData(category.children, category.id);
+            }
+        });
+    }
+    
+    loadChildren(categoryId, level) {
+        if (!categoryId) return;
+        
+        fetch(this.options.childrenApiUrl.replace('{id}', categoryId))
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    this.createSubDropdown(data.children, level + 1, categoryId);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading children:', error);
+            });
+    }
+    
+    createSubDropdown(children, level, parentId) {
+        const container = document.getElementById(`sub_dropdowns_${this.selectorId}`);
+        
+        // Remove all dropdowns below current level
+        const existingDropdowns = container.querySelectorAll('.dropdown-level');
+        existingDropdowns.forEach((dropdown, index) => {
+            if (index >= level - 1) {
+                dropdown.remove();
+            }
+        });
+        
+        if (children.length === 0) {
+            this.updateSelectedPath();
+            return;
+        }
+        
+        // Create new dropdown
+        const dropdownDiv = document.createElement('div');
+        dropdownDiv.className = 'dropdown-level mb-2';
+        dropdownDiv.innerHTML = `
+            <select class="form-control category-level-select" data-level="${level}" data-parent="${parentId}">
+                <option value="">Select Subcategory</option>
+            </select>
+        `;
+        
+        container.appendChild(dropdownDiv);
+        
+        const select = dropdownDiv.querySelector('select');
+        children.forEach(child => {
+            const option = new Option(child.category_name, child.id);
+            select.add(option);
+        });
+        
+        // Trigger change to update path
+        this.updateSelectedPath();
+    }
+    
+    updateSelectedPath() {
+        const container = document.getElementById(`sub_dropdowns_${this.selectorId}`);
+        const selects = container.querySelectorAll('.category-level-select');
+        const rootSelect = document.getElementById(`root_category_${this.selectorId}`);
+        
+        this.selectedPath = [];
+        
+        // Add root category if selected
+        if (rootSelect.value) {
+            this.selectedPath.push({
+                id: rootSelect.value,
+                name: rootSelect.options[rootSelect.selectedIndex].text,
+                level: 0
+            });
+        }
+        
+        // Add subcategories
+        selects.forEach(select => {
+            if (select.value) {
+                this.selectedPath.push({
+                    id: select.value,
+                    name: select.options[select.selectedIndex].text,
+                    level: parseInt(select.dataset.level)
+                });
+            }
+        });
+        
+        // Update hidden field
+        const hiddenField = document.getElementById(`final_category_id_${this.selectorId}`);
+        const finalCategory = this.selectedPath[this.selectedPath.length - 1];
+        hiddenField.value = finalCategory ? finalCategory.id : '';
+        
+        // Update display
+        const pathDisplay = document.getElementById(`selected_path_${this.selectorId}`);
+        if (this.selectedPath.length > 0) {
+            const pathNames = this.selectedPath.map(item => item.name);
+            pathDisplay.textContent = pathNames.join(' > ');
+        } else {
+            pathDisplay.textContent = 'None';
+        }
+    }
+    
+    bindEvents() {
+        const container = document.getElementById(`sub_dropdowns_${this.selectorId}`);
+        const rootSelect = document.getElementById(`root_category_${this.selectorId}`);
+        
+        // Root category change
+        rootSelect.addEventListener('change', (e) => {
+            if (e.target.value) {
+                this.loadChildren(e.target.value, 0);
+            } else {
+                // Clear all sub dropdowns
+                container.innerHTML = '';
+                this.updateSelectedPath();
+            }
+        });
+        
+        // Delegate event for dynamically created sub-dropdowns
+        container.addEventListener('change', (e) => {
+            if (e.target.classList.contains('category-level-select')) {
+                const level = parseInt(e.target.dataset.level);
+                const categoryId = e.target.value;
+                
+                if (categoryId) {
+                    this.loadChildren(categoryId, level);
+                } else {
+                    // Remove all dropdowns below current level
+                    const existingDropdowns = container.querySelectorAll('.dropdown-level');
+                    existingDropdowns.forEach((dropdown, index) => {
+                        if (index > level - 1) {
+                            dropdown.remove();
+                        }
+                    });
+                    this.updateSelectedPath();
+                }
+            }
+        });
+    }
+    
+    // Public method to set initial value
+    setValue(categoryId) {
+        if (!categoryId) return;
+        
+        // Find the path to the category and set dropdowns accordingly
+        fetch(`/api/categories/${categoryId}/path/`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const pathIds = data.path.path_ids;
+                    
+                    // Set root category
+                    if (pathIds.length > 0) {
+                        const rootSelect = document.getElementById(`root_category_${this.selectorId}`);
+                        rootSelect.value = pathIds[0];
+                        this.loadChildren(pathIds[0], 0);
+                        
+                        // Set subcategories sequentially
+                        pathIds.slice(1).forEach((id, index) => {
+                            setTimeout(() => {
+                                const container = document.getElementById(`sub_dropdowns_${this.selectorId}`);
+                                const select = container.querySelector(`select[data-level="${index + 1}"]`);
+                                if (select) {
+                                    select.value = id;
+                                    this.loadChildren(id, index + 1);
+                                }
+                            }, (index + 1) * 200);
+                        });
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error setting initial value:', error);
+            });
+    }
+    
+    // Public method to get current value
+    getValue() {
+        return document.getElementById(`final_category_id_${this.selectorId}`).value;
+    }
+    
+    // Public method to get selected path
+    getSelectedPath() {
+        return this.selectedPath;
+    }
+}
+
+// Auto-initialize category selectors
+document.addEventListener('DOMContentLoaded', function() {
+    // Find all category selectors and initialize them
+    const categorySelectors = document.querySelectorAll('.category-selector');
+    categorySelectors.forEach(selector => {
+        const selectorId = selector.id;
+        if (selectorId) {
+            // Extract the selector ID (remove 'categorySelector' prefix if present)
+            const cleanId = selectorId.replace('categorySelector', '').replace(/^_+|_+$/g, '');
+            const instanceId = cleanId || 'default';
+            
+            // Create a global instance variable
+            window[`categorySelector_${instanceId}`] = new CategorySelector(selectorId);
+        }
+    });
+});
+</script>
+
+<style>
+.category-selector .cascading-dropdowns {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 1rem;
+    background-color: #f8f9fa;
+}
+
+.category-selector .dropdown-level {
+    position: relative;
+}
+
+.category-selector .dropdown-level select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px 12px;
+    padding-right: 2.5rem;
+}
+
+.category-selector .selected-path {
+    min-height: 1.5rem;
+    padding: 0.5rem;
+    background-color: #e9ecef;
+    border-radius: 0.25rem;
+    font-weight: 500;
+}
+
+.category-selector .selected-path span {
+    color: #495057;
+}
+</style>

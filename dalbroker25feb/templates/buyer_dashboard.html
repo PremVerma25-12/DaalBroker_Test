@@ -1,0 +1,1015 @@
+{% extends 'base.html' %}
+
+{% block title %}Buyer Dashboard{% endblock %}
+
+{% block content %}
+<head>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root{
+      --primary:#0f172a;
+      --muted:#64748b;
+      --muted2:#94a3b8;
+      --card:#ffffff;
+      --bg:#f8fafc;
+      --border:#e2e8f0;
+
+      --blue:#3b82f6;
+      --green:#10b981;
+      --amber:#f59e0b;
+      --red:#ef4444;
+      --purple:#8b5cf6;
+      --cyan:#06b6d4;
+
+      --shadow-md: 0 6px 18px rgba(15,23,42,.08);
+    }
+
+    .buyer-wrap{ padding:.25rem 0 1.25rem; }
+
+    .page-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:1rem;
+      flex-wrap:wrap;
+      margin-bottom:1.25rem;
+    }
+    .page-head h2{
+      margin:0;
+      font-weight:950;
+      color:var(--primary);
+      letter-spacing:.2px;
+    }
+    .page-sub{
+      color:var(--muted);
+      margin:.25rem 0 0;
+      font-size:.9rem;
+    }
+
+    /* KPI */
+    .kpi-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+      gap:1rem;
+      margin-bottom:1.25rem;
+    }
+    .kpi{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:1.1rem 1.15rem 1rem;
+      box-shadow:var(--shadow-md);
+      position:relative;
+      overflow:hidden;
+      min-height:118px;
+      transition:.2s ease;
+    }
+    .kpi:hover{ transform:translateY(-2px); }
+    .kpi::before{
+      content:"";
+      position:absolute;
+      left:0; top:0; right:0;
+      height:4px;
+      background:linear-gradient(90deg,var(--blue),var(--green));
+    }
+    .kpi.green::before{ background:linear-gradient(90deg,var(--green),#34d399); }
+    .kpi.amber::before{ background:linear-gradient(90deg,var(--amber),#fbbf24); }
+    .kpi.red::before{ background:linear-gradient(90deg,var(--red),#f87171); }
+    .kpi.purple::before{ background:linear-gradient(90deg,var(--purple),#a78bfa); }
+    .kpi.cyan::before{ background:linear-gradient(90deg,var(--cyan),#22d3ee); }
+
+    .kpi-top{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:.75rem;
+      margin-bottom:.65rem;
+    }
+    .kpi-icon{
+      width:46px;height:46px;
+      border-radius:14px;
+      display:flex;align-items:center;justify-content:center;
+      font-size:1.2rem;
+      background:rgba(59,130,246,.10);
+      color:var(--blue);
+    }
+    .kpi.green .kpi-icon{ background:rgba(16,185,129,.10); color:var(--green); }
+    .kpi.amber .kpi-icon{ background:rgba(245,158,11,.12); color:var(--amber); }
+    .kpi.red .kpi-icon{ background:rgba(239,68,68,.10); color:var(--red); }
+    .kpi.purple .kpi-icon{ background:rgba(139,92,246,.10); color:var(--purple); }
+    .kpi.cyan .kpi-icon{ background:rgba(6,182,212,.10); color:var(--cyan); }
+
+    .kpi-title{
+      font-size:.78rem;
+      font-weight:900;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      color:var(--muted);
+      margin:0 0 .25rem;
+    }
+    .kpi-value{
+      font-size:1.75rem;
+      font-weight:950;
+      color:var(--primary);
+      line-height:1.05;
+      margin:0;
+      font-family:"Outfit",system-ui;
+    }
+    .kpi-sub{
+      margin:.4rem 0 0;
+      color:var(--muted);
+      font-size:.85rem;
+    }
+    .kpi-change{
+      margin-top:.4rem;
+      font-size:.82rem;
+      font-weight:900;
+      color:var(--muted);
+      display:flex;
+      align-items:center;
+      gap:.35rem;
+      white-space:nowrap;
+    }
+    .kpi-change.pos{ color:var(--green); }
+    .kpi-change.neg{ color:var(--red); }
+
+    /* Card */
+    .cardx{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:1.15rem;
+      box-shadow:var(--shadow-md);
+      margin-bottom:1rem;
+    }
+    .cardx-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:.75rem;
+      padding-bottom:.85rem;
+      margin-bottom:1rem;
+      border-bottom:1px solid var(--border);
+      flex-wrap:wrap;
+    }
+    .cardx-title{
+      margin:0;
+      font-size:1.02rem;
+      font-weight:950;
+      color:var(--primary);
+    }
+    .filters{ display:flex; gap:.5rem; flex-wrap:wrap; }
+    .fbtn{
+      border:1px solid var(--border);
+      background:transparent;
+      border-radius:12px;
+      padding:.45rem .8rem;
+      font-weight:900;
+      font-size:.85rem;
+      color:var(--muted);
+      cursor:pointer;
+      transition:.15s ease;
+      user-select:none;
+    }
+    .fbtn:hover,.fbtn.active{
+      background:var(--blue);
+      color:#fff;
+      border-color:var(--blue);
+    }
+
+    /* Badges */
+    .sb{
+      display:inline-flex; align-items:center; gap:.35rem;
+      padding:.32rem .65rem;
+      border-radius:999px;
+      font-weight:900;
+      font-size:.75rem;
+      white-space:nowrap;
+    }
+    .sb::before{ content:""; width:7px;height:7px;border-radius:50%; background:currentColor; }
+    .sb.ok{ background:rgba(16,185,129,.12); color:var(--green); }
+    .sb.warn{ background:rgba(245,158,11,.12); color:var(--amber); }
+    .sb.bad{ background:rgba(239,68,68,.12); color:var(--red); }
+    .sb.info{ background:rgba(59,130,246,.12); color:var(--blue); }
+    .sb.purp{ background:rgba(139,92,246,.12); color:var(--purple); }
+
+    /* Tables */
+    .table thead th{
+      white-space:nowrap;
+      font-size:.72rem;
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      color:var(--primary);
+      font-weight:950;
+      background:var(--bg);
+      border-top:0;
+    }
+    .table td{ vertical-align:middle; white-space:nowrap; }
+
+    /* Mini list */
+    .mini{ display:flex; flex-direction:column; gap:.75rem; }
+    .mini-row{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:1rem;
+      padding:.8rem;
+      background:var(--bg);
+      border:1px solid var(--border);
+      border-radius:14px;
+    }
+    .mini-row h6{
+      margin:0 0 .15rem;
+      font-weight:950;
+      color:var(--primary);
+      font-size:.92rem;
+    }
+    .mini-row p{ margin:0; color:var(--muted); font-size:.84rem; }
+    .mini-right{
+      text-align:right;
+      color:var(--muted2);
+      font-size:.8rem;
+      white-space:nowrap;
+    }
+    @media(max-width:768px){
+      .mini-row{ flex-direction:column; }
+      .mini-right{ text-align:left; }
+    }
+
+    /* Loading Spinner */
+    .loading-spinner {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 200px;
+    }
+    .spinner {
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      border-left-color: var(--blue);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+
+<div class="buyer-wrap">
+  {% include 'includes/kyc_status_card.html' %}
+  
+  <div class="page-head">
+    <div>
+      <h2>Buyer Dashboard</h2>
+      <p class="page-sub">Welcome, {{ user.username }}! Track your orders, payments, suppliers & transport.</p>
+    </div>
+    <div class="text-muted small"><span id="buyerNow"></span></div>
+  </div>
+
+  <!-- Loading Indicator -->
+  <div id="loadingIndicator" class="loading-spinner">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Dashboard Content (Hidden initially) -->
+  <div id="dashboardContent" style="display: none;">
+    
+    <!-- Deal Products Section -->
+    <div class="cardx">
+      <div class="cardx-head">
+        <h4 class="cardx-title">Deal Products</h4>
+        <div class="text-muted small">Status from interest/confirmation workflow</div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-striped align-middle">
+          <thead>
+            <tr>
+              <th>Product Image</th>
+              <th>Title</th>
+              <th>Seller</th>
+              <th>Approval Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="dealProductsTableBody">
+            <!-- Filled by JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid" id="kpiContainer">
+      <!-- Filled by JavaScript -->
+    </div>
+
+    <!-- CHARTS -->
+    <div class="row">
+      <div class="col-lg-8">
+        <div class="cardx">
+          <div class="cardx-head">
+            <h4 class="cardx-title">Spend & Orders Trend</h4>
+            <div class="filters" id="trendFilters">
+              <button class="fbtn active" data-range="7D">7D</button>
+              <button class="fbtn" data-range="1M">1M</button>
+              <button class="fbtn" data-range="3M">3M</button>
+              <button class="fbtn" data-range="1Y">1Y</button>
+            </div>
+          </div>
+          <canvas id="spendOrdersChart" height="90"></canvas>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <div class="cardx">
+          <div class="cardx-head">
+            <h4 class="cardx-title">Supplier Spend (Top)</h4>
+          </div>
+          <canvas id="supplierSpendChart" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-lg-4">
+        <div class="cardx">
+          <div class="cardx-head"><h4 class="cardx-title">Commodity Mix (Volume)</h4></div>
+          <canvas id="commodityMixChart" height="200"></canvas>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <div class="cardx">
+          <div class="cardx-head"><h4 class="cardx-title">Order Status</h4></div>
+          <canvas id="orderStatusChart" height="200"></canvas>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <div class="cardx">
+          <div class="cardx-head"><h4 class="cardx-title">Transport Status</h4></div>
+          <canvas id="transportStatusChart" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECENT RFQs + RECENT ORDERS -->
+    <div class="row">
+      <div class="col-lg-5">
+        <div class="cardx">
+          <div class="cardx-head"><h4 class="cardx-title">Recent RFQs / Negotiations</h4></div>
+          <div class="mini" id="recentRfqsContainer">
+            <!-- Filled by JavaScript -->
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div class="cardx">
+          <div class="cardx-head">
+            <h4 class="cardx-title">Recent Orders / Contracts</h4>
+            <div class="text-muted small">Payment + transport view</div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-striped align-middle">
+              <thead>
+                <tr>
+                  <th>Order/Contract</th>
+                  <th>Seller</th>
+                  <th>Commodity</th>
+                  <th>Qty</th>
+                  <th>Value</th>
+                  <th>Payment</th>
+                  <th>Transport</th>
+                  <th>ETA</th>
+                </tr>
+              </thead>
+              <tbody id="recentOrdersTableBody">
+                <!-- Filled by JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TRANSPORT TRACKING TABLE -->
+    <div class="cardx">
+      <div class="cardx-head">
+        <h4 class="cardx-title">Transport Tracking</h4>
+        <div class="text-muted small">Latest LR/Trip updates</div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-striped align-middle">
+          <thead>
+            <tr>
+              <th>LR / Trip</th>
+              <th>Order/Contract</th>
+              <th>Transporter</th>
+              <th>From → To</th>
+              <th>Status</th>
+              <th>Last Scan</th>
+              <th>ETA</th>
+            </tr>
+          </thead>
+          <tbody id="transportTableBody">
+            <!-- Filled by JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Deal Product View Modal -->
+<div class="modal fade" id="dealProductViewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Deal Product Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col-md-6"><strong>Product:</strong> <span id="deal_modal_title"></span></div>
+          <div class="col-md-6"><strong>Seller:</strong> <span id="deal_modal_seller"></span></div>
+          <div class="col-md-6"><strong>Seller Phone:</strong> <span id="deal_modal_seller_phone"></span></div>
+          <div class="col-md-6"><strong>Seller Email:</strong> <span id="deal_modal_seller_email"></span></div>
+          <div class="col-md-6"><strong>Price:</strong> <span id="deal_modal_amount"></span></div>
+          <div class="col-md-6"><strong>Deal Status:</strong> <span id="deal_modal_status"></span></div>
+          <div class="col-md-6"><strong>Created Date:</strong> <span id="deal_modal_created_at"></span></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Fallback Dummy Data (if API fails) -->
+<script>
+  window.DUMMY_BUYER_DATA = {
+    deal_products: [],
+    kpis: {
+      spent: "₹9.35L",
+      spent_delta: "8% vs last month",
+      active_orders: 12,
+      open_rfq: 6,
+      active_contracts: 9,
+      signed_mtd: 4,
+      in_transit: 5,
+      avg_eta: "2.1 days",
+      pay_pending: 4,
+      pending_amount: "₹2.4L",
+      issues: 3,
+      open_tickets: 2,
+      top_supplier: "ABC Traders",
+      top_supplier_share: "23% of spend",
+      avg_price: "₹6,780/qtl",
+      avg_price_delta: "-1.6%"
+    },
+    charts: {
+      trend: {
+        "7D": { labels:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], spend:[0.9,1.1,0.7,1.3,1.2,0.8,1.4], orders:[2,3,2,4,3,2,4] },
+        "1M": { labels:["W1","W2","W3","W4"], spend:[2.1,2.4,2.2,2.6], orders:[7,8,7,9] },
+        "3M": { labels:["Nov","Dec","Jan"], spend:[6.8,7.4,9.35], orders:[18,20,24] },
+        "1Y": { labels:["Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan"], spend:[4.1,4.3,4.6,5.0,5.2,5.5,6.0,6.4,6.9,7.6,8.2,9.35], orders:[9,10,11,12,13,14,15,16,17,18,20,24] }
+      },
+      suppliers: {
+        labels:["ABC Traders","DEF Suppliers","GHI Trading","JKL Commodities","VWX Merchants"],
+        spend:[2.15,1.86,1.62,1.44,1.28]
+      },
+      commodity_mix: {
+        labels:["Toor","Chana","Moong","Urad","Masoor","Others"],
+        volume:[240,190,125,110,150,70]
+      },
+      order_status: {
+        labels:["Delivered","Processing","In Transit","Cancelled"],
+        counts:[18,4,2,1]
+      },
+      transport: {
+        labels:["Pickup Due","In Transit","Delivered","Delayed"],
+        counts:[2,5,14,1]
+      }
+    },
+    recent_rfqs: [
+      {
+        id: "RFQ-2108",
+        product: "Toor Dal",
+        quantity: "70 Qtl",
+        price: 7140,
+        seller: "ABC Traders",
+        status: "Negotiation",
+        status_class: "info",
+        updated: "18 min ago"
+      },
+      {
+        id: "RFQ-2103",
+        product: "Chana Dal",
+        quantity: "60 Qtl",
+        price: 6010,
+        seller: "GHI Trading",
+        status: "Deal Locked",
+        status_class: "purp",
+        updated: "2 hrs ago"
+      },
+      {
+        id: "RFQ-2097",
+        product: "Moong Dal",
+        quantity: "40 Qtl",
+        price: 5820,
+        seller: "DEF Suppliers",
+        status: "Awaiting Seller",
+        status_class: "warn",
+        updated: "Today"
+      }
+    ],
+    recent_orders: [
+      {
+        id: "CNT-7812",
+        seller: "ABC Traders",
+        commodity: "Toor Dal",
+        quantity: "80 Qtl",
+        value: 574400,
+        payment_status: "Partial",
+        payment_class: "warn",
+        transport_status: "In Transit",
+        transport_class: "info",
+        eta: "Feb 05"
+      },
+      {
+        id: "ORD-5419",
+        seller: "DEF Suppliers",
+        commodity: "Moong Dal",
+        quantity: "40 Qtl",
+        value: 329600,
+        payment_status: "Paid",
+        payment_class: "ok",
+        transport_status: "Delivered",
+        transport_class: "ok",
+        eta: "—"
+      },
+      {
+        id: "ORD-5407",
+        seller: "GHI Trading",
+        commodity: "Chana Dal",
+        quantity: "65 Qtl",
+        value: 391300,
+        payment_status: "Pending",
+        payment_class: "bad",
+        transport_status: "Pickup Due",
+        transport_class: "warn",
+        eta: "Feb 06"
+      }
+    ],
+    transport_tracking: [
+      {
+        lr: "LR-11208",
+        contract: "#CNT-7812",
+        transporter: "TransCo Logistics",
+        route: "Nagpur → Pune",
+        status: "In Transit",
+        status_class: "info",
+        last_scan: "Feb 03, 11:20",
+        eta: "Feb 05"
+      },
+      {
+        lr: "LR-11177",
+        contract: "#ORD-5388",
+        transporter: "FastMove Carriers",
+        route: "Katni → Indore",
+        status: "In Transit",
+        status_class: "info",
+        last_scan: "Feb 03, 09:05",
+        eta: "Feb 04"
+      },
+      {
+        lr: "LR-11151",
+        contract: "#ORD-5407",
+        transporter: "RoadRunner Transport",
+        route: "Indore → Bhopal",
+        status: "Pickup Due",
+        status_class: "warn",
+        last_scan: "Feb 02, 18:40",
+        eta: "Feb 06"
+      }
+    ]
+  };
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const dealProductViewModalEl = document.getElementById("dealProductViewModal");
+  const dealProductViewModal = window.bootstrap ? new bootstrap.Modal(dealProductViewModalEl) : null;
+
+  let trendChart, supplierChart, commodityChart, orderChart, transportChart;
+  let currentDashboardData = null;
+
+  // Format currency
+  function formatCurrency(value) {
+    if (value >= 100000) return `₹${(value/100000).toFixed(2)}L`;
+    if (value >= 1000) return `₹${(value/1000).toFixed(1)}K`;
+    return `₹${value}`;
+  }
+
+  // Load dashboard data
+  async function loadDashboardData() {
+    try {
+      const response = await fetch('/api/buyer/dashboard/', {
+        headers: {
+          'X-CSRFToken': '{{ csrf_token }}'
+        }
+      });
+      
+      if (response.ok) {
+        currentDashboardData = await response.json();
+      } else {
+        console.warn('API failed, using dummy data');
+        currentDashboardData = window.DUMMY_BUYER_DATA;
+      }
+    } catch (error) {
+      console.error('Error loading dashboard:', error);
+      currentDashboardData = window.DUMMY_BUYER_DATA;
+    }
+
+    // Hide loading, show content
+    document.getElementById('loadingIndicator').style.display = 'none';
+    document.getElementById('dashboardContent').style.display = 'block';
+
+    // Render all sections
+    renderDealProducts();
+    renderKPIs();
+    renderCharts('7D');
+    renderRecentRFQs();
+    renderRecentOrders();
+    renderTransportTracking();
+  }
+
+  // Render Deal Products
+  function renderDealProducts() {
+    const tbody = document.getElementById('dealProductsTableBody');
+    const products = currentDashboardData.deal_products || [];
+    
+    if (products.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No deal products found.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = products.map(p => `
+      <tr>
+        <td>
+          ${p.primary_image_url 
+            ? `<img src="${p.primary_image_url}" alt="${p.title}" style="width:52px;height:52px;object-fit:cover" class="rounded">`
+            : '<span class="text-muted">No Image</span>'}
+        </td>
+        <td>${p.title}</td>
+        <td>${p.seller_name}</td>
+        <td>
+          ${p.interest_status === 'interested' ? '<span class="sb info">Interested</span>' : ''}
+          ${p.interest_status === 'seller_confirmed' ? '<span class="sb warn">Waiting for Your Confirmation</span>' : ''}
+          ${p.interest_status === 'deal_confirmed' ? '<span class="sb ok">Deal Confirmed</span>' : ''}
+        </td>
+        <td>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-info deal-product-view-btn"
+            data-title="${p.title}"
+            data-seller="${p.seller_name}"
+            data-seller-phone="${p.seller_phone || '-'}"
+            data-seller-email="${p.seller_email || '-'}"
+            data-amount="${p.amount || '0'}"
+            data-deal-status="${p.interest_status}"
+            data-created-at="${p.created_at || '-'}"
+          >
+            <i class="fas fa-eye"></i>
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  // Render KPIs
+  function renderKPIs() {
+    const k = currentDashboardData.kpis;
+    const container = document.getElementById('kpiContainer');
+    
+    container.innerHTML = `
+      <div class="kpi cyan">
+        <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-rupee-sign"></i></div></div>
+        <div class="kpi-title">Spent (MTD)</div>
+        <p class="kpi-value">${k.spent}</p>
+        <div class="kpi-change pos"><i class="fas fa-arrow-up"></i><span>${k.spent_delta}</span></div>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-shopping-cart"></i></div></div>
+        <div class="kpi-title">Active Orders</div>
+        <p class="kpi-value">${k.active_orders}</p>
+        <p class="kpi-sub">Open RFQs: <strong>${k.open_rfq}</strong></p>
+      </div>
+
+      <div class="kpi purple">
+        <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-file-contract"></i></div></div>
+        <div class="kpi-title">Active Contracts</div>
+        <p class="kpi-value">${k.active_contracts}</p>
+        <p class="kpi-sub">Signed this month: <strong>${k.signed_mtd}</strong></p>
+      </div>
+
+      <div class="kpi green">
+        <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-truck"></i></div></div>
+        <div class="kpi-title">In Transit</div>
+        <p class="kpi-value">${k.in_transit}</p>
+        <p class="kpi-sub">Avg ETA: <strong>${k.avg_eta}</strong></p>
+      </div>
+
+      <div class="kpi amber">
+        <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-file-invoice"></i></div></div>
+        <div class="kpi-title">Payment Pending</div>
+        <p class="kpi-value">${k.pay_pending}</p>
+        <p class="kpi-sub">₹ pending: <strong>${k.pending_amount}</strong></p>
+      </div>
+
+      <div class="kpi red">
+        <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-exclamation-triangle"></i></div></div>
+        <div class="kpi-title">Issues / Complaints</div>
+        <p class="kpi-value">${k.issues}</p>
+        <p class="kpi-sub">Open tickets: <strong>${k.open_tickets}</strong></p>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-star"></i></div></div>
+        <div class="kpi-title">Top Supplier (MTD)</div>
+        <p class="kpi-value">${k.top_supplier}</p>
+        <p class="kpi-sub">Share: <strong>${k.top_supplier_share}</strong></p>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-top"><div class="kpi-icon"><i class="fas fa-chart-line"></i></div></div>
+        <div class="kpi-title">Avg Purchase Price</div>
+        <p class="kpi-value">${k.avg_price}</p>
+        <p class="kpi-sub">Vs last month: <strong>${k.avg_price_delta}</strong></p>
+      </div>
+    `;
+  }
+
+  // Render Charts
+  function renderCharts(rangeKey = '7D') {
+    const trend = currentDashboardData.charts.trend[rangeKey];
+    
+    // Trend Chart
+    const ctx1 = document.getElementById("spendOrdersChart").getContext("2d");
+    if (trendChart) trendChart.destroy();
+    
+    trendChart = new Chart(ctx1, {
+      type: "bar",
+      data: {
+        labels: trend.labels,
+        datasets: [
+          {
+            type: "line",
+            label: "Spend (₹ Lakhs)",
+            data: trend.spend,
+            borderColor: "#3b82f6",
+            backgroundColor: "rgba(59,130,246,.12)",
+            borderWidth: 3,
+            tension: 0.35,
+            fill: true,
+            yAxisID: "y"
+          },
+          {
+            label: "Orders",
+            data: trend.orders,
+            backgroundColor: "rgba(16,185,129,.75)",
+            borderRadius: 10,
+            borderSkipped: false,
+            yAxisID: "y1"
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { position: "top", labels: { usePointStyle: true, padding: 16, font: { size: 12, weight: "900" } } },
+          tooltip: { backgroundColor: "#0f172a", padding: 12 }
+        },
+        scales: {
+          y: { beginAtZero: true, grid: { color: "#e2e8f0" }, title: { display: true, text: "₹ Lakhs" } },
+          y1: { beginAtZero: true, position: "right", grid: { display: false }, title: { display: true, text: "Orders" } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+
+    // Supplier Chart
+    const suppliers = currentDashboardData.charts.suppliers;
+    const ctx2 = document.getElementById("supplierSpendChart").getContext("2d");
+    if (supplierChart) supplierChart.destroy();
+    
+    supplierChart = new Chart(ctx2, {
+      type: "bar",
+      data: {
+        labels: suppliers.labels,
+        datasets: [{
+          label: "Spend (₹ Lakhs)",
+          data: suppliers.spend,
+          backgroundColor: "rgba(6,182,212,.75)",
+          borderRadius: 10,
+          borderSkipped: false
+        }]
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: { legend: { display: false }, tooltip: { backgroundColor: "#0f172a", padding: 12 } },
+        scales: {
+          x: { beginAtZero: true, grid: { color: "#e2e8f0" } },
+          y: { grid: { display: false } }
+        }
+      }
+    });
+
+    // Commodity Mix Chart
+    const commodity = currentDashboardData.charts.commodity_mix;
+    const ctx3 = document.getElementById("commodityMixChart").getContext("2d");
+    if (commodityChart) commodityChart.destroy();
+    
+    commodityChart = new Chart(ctx3, {
+      type: "polarArea",
+      data: {
+        labels: commodity.labels,
+        datasets: [{
+          data: commodity.volume,
+          backgroundColor: [
+            "rgba(59,130,246,.75)",
+            "rgba(16,185,129,.75)",
+            "rgba(245,158,11,.75)",
+            "rgba(139,92,246,.75)",
+            "rgba(6,182,212,.75)",
+            "rgba(100,116,139,.65)"
+          ],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { position: "bottom", labels: { usePointStyle: true, padding: 14, font: { size: 12, weight: "900" } } },
+          tooltip: { backgroundColor: "#0f172a", padding: 12 }
+        }
+      }
+    });
+
+    // Order Status Chart
+    const orderStatus = currentDashboardData.charts.order_status;
+    const ctx4 = document.getElementById("orderStatusChart").getContext("2d");
+    if (orderChart) orderChart.destroy();
+    
+    orderChart = new Chart(ctx4, {
+      type: "doughnut",
+      data: {
+        labels: orderStatus.labels,
+        datasets: [{
+          data: orderStatus.counts,
+          backgroundColor: ["#10b981","#f59e0b","#3b82f6","#ef4444"],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { position: "bottom", labels: { usePointStyle: true, padding: 14, font: { size: 12, weight: "900" } } },
+          tooltip: { backgroundColor: "#0f172a", padding: 12 }
+        }
+      }
+    });
+
+    // Transport Status Chart
+    const transport = currentDashboardData.charts.transport;
+    const ctx5 = document.getElementById("transportStatusChart").getContext("2d");
+    if (transportChart) transportChart.destroy();
+    
+    transportChart = new Chart(ctx5, {
+      type: "doughnut",
+      data: {
+        labels: transport.labels,
+        datasets: [{
+          data: transport.counts,
+          backgroundColor: ["#f59e0b","#3b82f6","#10b981","#ef4444"],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { position: "bottom", labels: { usePointStyle: true, padding: 14, font: { size: 12, weight: "900" } } },
+          tooltip: { backgroundColor: "#0f172a", padding: 12 }
+        }
+      }
+    });
+  }
+
+  // Render Recent RFQs
+  function renderRecentRFQs() {
+    const container = document.getElementById('recentRfqsContainer');
+    const rfqs = currentDashboardData.recent_rfqs || [];
+    
+    container.innerHTML = rfqs.map(rfq => `
+      <div class="mini-row">
+        <div>
+          <h6>#${rfq.id} • ${rfq.product} • ${rfq.quantity}</h6>
+          <p>Best quote: ₹${rfq.price.toLocaleString()}/qtl • Seller: ${rfq.seller}</p>
+          <span class="sb ${rfq.status_class}">${rfq.status}</span>
+        </div>
+        <div class="mini-right">Updated ${rfq.updated}</div>
+      </div>
+    `).join('');
+  }
+
+  // Render Recent Orders
+  function renderRecentOrders() {
+    const tbody = document.getElementById('recentOrdersTableBody');
+    const orders = currentDashboardData.recent_orders || [];
+    
+    tbody.innerHTML = orders.map(order => `
+      <tr>
+        <td><strong>#${order.id}</strong></td>
+        <td>${order.seller}</td>
+        <td>${order.commodity}</td>
+        <td>${order.quantity}</td>
+        <td>₹${order.value.toLocaleString()}</td>
+        <td><span class="sb ${order.payment_class}">${order.payment_status}</span></td>
+        <td><span class="sb ${order.transport_class}">${order.transport_status}</span></td>
+        <td>${order.eta}</td>
+      </tr>
+    `).join('');
+  }
+
+  // Render Transport Tracking
+  function renderTransportTracking() {
+    const tbody = document.getElementById('transportTableBody');
+    const tracking = currentDashboardData.transport_tracking || [];
+    
+    tbody.innerHTML = tracking.map(t => `
+      <tr>
+        <td><strong>${t.lr}</strong></td>
+        <td>${t.contract}</td>
+        <td>${t.transporter}</td>
+        <td>${t.route}</td>
+        <td><span class="sb ${t.status_class}">${t.status}</span></td>
+        <td>${t.last_scan}</td>
+        <td>${t.eta}</td>
+      </tr>
+    `).join('');
+  }
+
+  // Event Listeners
+  document.addEventListener("click", function (e) {
+    // Deal product view button
+    const btn = e.target.closest(".deal-product-view-btn");
+    if (btn && dealProductViewModal) {
+      document.getElementById("deal_modal_title").textContent = btn.dataset.title || "-";
+      document.getElementById("deal_modal_seller").textContent = btn.dataset.seller || "-";
+      document.getElementById("deal_modal_seller_phone").textContent = btn.dataset.sellerPhone || "-";
+      document.getElementById("deal_modal_seller_email").textContent = btn.dataset.sellerEmail || "-";
+      document.getElementById("deal_modal_amount").textContent = btn.dataset.amount ? `₹${btn.dataset.amount}` : "-";
+      
+      let statusText = btn.dataset.dealStatus || "-";
+      if (statusText === "interested") statusText = "Interested";
+      if (statusText === "seller_confirmed") statusText = "Waiting for Your Confirmation";
+      if (statusText === "deal_confirmed") statusText = "Deal Confirmed";
+      document.getElementById("deal_modal_status").textContent = statusText;
+      
+      document.getElementById("deal_modal_created_at").textContent = btn.dataset.createdAt || "-";
+      dealProductViewModal.show();
+    }
+  });
+
+  // Trend filters
+  document.querySelectorAll("#trendFilters .fbtn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#trendFilters .fbtn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      renderCharts(btn.dataset.range);
+    });
+  });
+
+  // Set current date/time
+  document.getElementById("buyerNow").textContent = new Date().toLocaleString("en-IN", {
+    weekday: "long", year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit"
+  });
+
+  // Load data on page load
+  loadDashboardData();
+</script>
+{% endblock %}
