@@ -28,7 +28,7 @@ SECRET_KEY = 'django-insecure-uefw0w0-f$(c*)*k(cpkt6rq_hrjn8orci1&7dap+5a8@$=e!0
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['64.227.170.178','daalsetu.zappcode.in']
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -116,9 +116,10 @@ WSGI_APPLICATION = 'daalbroker.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'daalbrokerdb',
-        'USER': 'daaluser',
-        'PASSWORD': 'daal1809broker!',
+        # 'NAME': 'daalbroker5fav',
+        'NAME': 'dalbroker5feb',
+        'USER': 'root',
+        'PASSWORD': 'root',
         'HOST': 'localhost',  # not localhost
         'PORT': '3306',
     }
