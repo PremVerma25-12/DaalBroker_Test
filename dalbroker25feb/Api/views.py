@@ -1,6 +1,7 @@
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate, logout as django_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.apps import apps
 from django.db import transaction
 from django.shortcuts import render, redirect
 from django.core.paginator import Paginator
@@ -23,6 +24,7 @@ from .serializers import *
 from .utils import *
 from .utils import _is_admin_user, _is_seller_user, _is_buyer_user
 from brokers_app.utils import (
+    has_permission,
     can_user_perform_action,
     get_user_status,
     normalize_user_status,
@@ -31,6 +33,28 @@ from brokers_app.utils import (
 from django.db.models import Q, Count, Sum, F, DecimalField, Avg
 from django.db.models.functions import Coalesce
 from decimal import Decimal
+from brokers_app.views import (
+    product_create_ajax as web_product_create_ajax,
+    product_get_ajax as web_product_get_ajax,
+    product_update_ajax as web_product_update_ajax,
+    product_delete_ajax as web_product_delete_ajax,
+    product_toggle_ajax as web_product_toggle_ajax,
+    product_update_stock_ajax as web_product_update_stock_ajax,
+    offers_list_ajax as web_offers_list_ajax,
+    branch_create_ajax as web_branch_create_ajax,
+    branch_update_ajax as web_branch_update_ajax,
+    branch_toggle_status_ajax as web_branch_toggle_status_ajax,
+    branch_delete_ajax as web_branch_delete_ajax,
+    brand_create_ajax as web_brand_create_ajax,
+    brand_get_ajax as web_brand_get_ajax,
+    brand_update_ajax as web_brand_update_ajax,
+    brand_delete_ajax as web_brand_delete_ajax,
+    user_create_ajax as web_user_create_ajax,
+    get_user_data as web_get_user_data,
+    user_update_ajax as web_user_update_ajax,
+    user_update_status_ajax as web_user_update_status_ajax,
+    user_delete_ajax as web_user_delete_ajax,
+)
 
 DEFAULT_PAGE_SIZE = 10
 logger = logging.getLogger(__name__)
@@ -282,6 +306,33 @@ def login_api(request):
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout_api(request):
+    """
+    Mobile logout endpoint.
+    Session logout always happens; refresh blacklisting is attempted only if
+    token blacklist app is installed and refresh token is provided.
+    """
+    refresh_token = (request.data.get('refresh') or '').strip()
+    token_blacklisted = False
+
+    if refresh_token and apps.is_installed('rest_framework_simplejwt.token_blacklist'):
+        try:
+            RefreshToken(refresh_token).blacklist()
+            token_blacklisted = True
+        except Exception:
+            token_blacklisted = False
+
+    django_logout(request)
+    return Response({
+        'success': True,
+        'message': 'Logged out successfully.',
+        'token_blacklisted': token_blacklisted,
+        'note': 'Please clear local access/refresh tokens on mobile client.',
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
 @permission_classes([AllowAny])
 def forgot_password_api(request):
     serializer = ForgotPasswordSerializer(data=request.data)
@@ -477,6 +528,118 @@ def kyc_list_api(request):
     } for u in page_obj.object_list]
     return Response({
         'results': data,
+        'pagination': {
+            'page': page_obj.number,
+            'num_pages': page_obj.paginator.num_pages,
+            'count': page_obj.paginator.count,
+            'has_next': page_obj.has_next(),
+            'has_previous': page_obj.has_previous(),
+            'window': pagination['window'],
+        }
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def mobile_kyc_list_api(request):
+    """
+    Mobile KYC listing endpoint.
+    Kept separate from /api/kyc/ because that path is currently used for HTML page.
+    """
+    if not _is_admin_user(request.user):
+        return Response({'success': False, 'message': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+    queryset = DaalUser.objects.exclude(role='admin').order_by('-date_joined')
+
+    search = (request.GET.get('search') or '').strip()
+    if search:
+        queryset = queryset.filter(
+            Q(first_name__icontains=search)
+            | Q(last_name__icontains=search)
+            | Q(username__icontains=search)
+            | Q(email__icontains=search)
+            | Q(mobile__icontains=search)
+        )
+
+    role = (request.GET.get('role') or '').strip()
+    if role:
+        queryset = queryset.filter(role=role)
+
+    kyc_status = (request.GET.get('kyc_status') or '').strip()
+    if kyc_status:
+        queryset = queryset.filter(kyc_status=kyc_status)
+
+    page_obj, pagination = _paginate_queryset(request, queryset)
+    results = [{
+        'id': u.id,
+        'name': f'{u.first_name or ""} {u.last_name or ""}'.strip() or u.username,
+        'username': u.username,
+        'mobile': u.mobile,
+        'email': u.email,
+        'role': u.role,
+        'kyc_status': u.kyc_status,
+        'pan_number': u.pan_number,
+        'gst_number': u.gst_number,
+        'kyc_submitted_at': u.kyc_submitted_at,
+        'kyc_approved_at': u.kyc_approved_at,
+        'kyc_rejected_at': u.kyc_rejected_at,
+        'kyc_rejection_reason': u.kyc_rejection_reason or '',
+        'account_status': u.account_status,
+    } for u in page_obj.object_list]
+
+    return Response({
+        'success': True,
+        'results': results,
+        'pagination': {
+            'page': page_obj.number,
+            'num_pages': page_obj.paginator.num_pages,
+            'count': page_obj.paginator.count,
+            'has_next': page_obj.has_next(),
+            'has_previous': page_obj.has_previous(),
+            'window': pagination['window'],
+        }
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def mobile_brand_list_api(request):
+    """
+    Mobile brand listing endpoint (JSON).
+    Web /brands/ page remains unchanged.
+    """
+    role = (getattr(request.user, 'role', '') or '').strip().lower()
+    can_read = (
+        _is_admin_user(request.user)
+        or role in {'buyer', 'super_admin'}
+        or has_permission(request.user, 'brand_management', 'read')
+    )
+    if not can_read:
+        return Response({'success': False, 'message': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+    queryset = BrandMaster.objects.select_related('created_by').order_by('-created_at')
+    search = (request.GET.get('search') or '').strip()
+    if search:
+        queryset = queryset.filter(brand_name__icontains=search)
+
+    status_filter = (request.GET.get('status') or '').strip().lower()
+    if status_filter in {BrandMaster.STATUS_ACTIVE, BrandMaster.STATUS_INACTIVE}:
+        queryset = queryset.filter(status=status_filter)
+
+    page_obj, pagination = _paginate_queryset(request, queryset)
+    results = [{
+        'id': brand.id,
+        'brand_unique_id': brand.brand_unique_id,
+        'brand_name': brand.brand_name,
+        'status': brand.status,
+        'created_by': brand.created_by.username if brand.created_by else '-',
+        'created_at': brand.created_at.strftime('%d/%m/%y'),
+        'updated_at': brand.updated_at.strftime('%d/%m/%y'),
+    } for brand in page_obj.object_list]
+
+    return Response({
+        'success': True,
+        'results': results,
         'pagination': {
             'page': page_obj.number,
             'num_pages': page_obj.paginator.num_pages,
@@ -2802,3 +2965,242 @@ def test_product_api(request, product_id):
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=500)
+
+
+
+def _contracts_qs_for_mobile(user):
+    qs = Contract.objects.select_related('product', 'buyer', 'seller').order_by('-confirmed_at', '-id')
+    if _is_admin_user(user):
+        return qs
+    if _is_seller_user(user):
+        return qs.filter(seller=user)
+    if _is_buyer_user(user):
+        return qs.filter(buyer=user)
+    return qs.none()
+
+
+def _apply_mobile_contract_filters(request, queryset):
+    status_filter = (request.GET.get('status') or '').strip().lower()
+    if status_filter:
+        queryset = queryset.filter(status=status_filter)
+
+    seller = (request.GET.get('seller') or '').strip()
+    if seller.isdigit():
+        queryset = queryset.filter(seller_id=int(seller))
+
+    buyer = (request.GET.get('buyer') or '').strip()
+    if buyer.isdigit():
+        queryset = queryset.filter(buyer_id=int(buyer))
+
+    search = (request.GET.get('search') or '').strip()
+    if search:
+        queryset = queryset.filter(
+            Q(contract_id__icontains=search) |
+            Q(product__title__icontains=search)
+        )
+
+    return queryset
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def mobile_contract_list_api(request):
+    contracts_qs = _apply_mobile_contract_filters(request, _contracts_qs_for_mobile(request.user))
+    page_obj, pagination = _paginate_queryset(request, contracts_qs, page_size=15)
+    serializer = ContractSerializer(page_obj.object_list, many=True, context={'request': request})
+    return Response({
+        'success': True,
+        'results': serializer.data,
+        'pagination': {
+            'page': page_obj.number,
+            'num_pages': page_obj.paginator.num_pages,
+            'count': page_obj.paginator.count,
+            'has_next': page_obj.has_next(),
+            'has_previous': page_obj.has_previous(),
+            'window': pagination['window'],
+        },
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET', 'PATCH', 'PUT'])
+@permission_classes([IsAuthenticated])
+def mobile_contract_detail_api(request, contract_id):
+    contract = Contract.objects.select_related('product', 'buyer', 'seller').filter(id=contract_id).first()
+    if not contract:
+        return Response({'success': False, 'message': 'Contract not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    is_admin = _is_admin_user(request.user)
+
+    # View permission: admin/super-admin can view any, others only own contract.
+    can_view = is_admin or contract.seller_id == request.user.id or contract.buyer_id == request.user.id
+    if not can_view:
+        return Response({'success': False, 'message': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+    if request.method == 'GET':
+        serializer = ContractSerializer(contract, context={'request': request})
+        return Response({'success': True, 'data': serializer.data}, status=status.HTTP_200_OK)
+
+    # Edit permission: only admin/super-admin.
+    if not is_admin:
+        return Response(
+            {'success': False, 'message': 'Permission denied. Only admin can edit contract.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    allowed_statuses = {choice[0] for choice in Contract.STATUS_CHOICES}
+    update_fields = []
+
+    if 'status' in request.data:
+        next_status = str(request.data.get('status') or '').strip().lower()
+        if not next_status or next_status not in allowed_statuses:
+            return Response({'success': False, 'message': 'Invalid contract status.'}, status=status.HTTP_400_BAD_REQUEST)
+        contract.status = next_status
+        update_fields.append('status')
+
+    if 'admin_remark' in request.data:
+        contract.admin_remark = request.data.get('admin_remark') or ''
+        update_fields.append('admin_remark')
+
+    if not update_fields:
+        return Response({
+            'success': False,
+            'message': 'No valid fields provided. Allowed fields: status, admin_remark.',
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    contract.save(update_fields=update_fields + ['updated_at'])
+    serializer = ContractSerializer(contract, context={'request': request})
+    return Response({
+        'success': True,
+        'message': 'Contract updated successfully.',
+        'data': serializer.data,
+    }, status=status.HTTP_200_OK)
+
+
+def _force_ajax_request(request):
+    """
+    Reuse existing web JSON handlers by forcing AJAX header on underlying
+    Django request so they always return JsonResponse (not redirects).
+    """
+    raw_request = request._request
+    raw_request.META['HTTP_X_REQUESTED_WITH'] = 'XMLHttpRequest'
+    return raw_request
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_offer_create_api(request):
+    return web_product_create_ajax(_force_ajax_request(request))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def mobile_offer_get_api(request, product_id):
+    return web_product_get_ajax(_force_ajax_request(request), product_id)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_offer_update_api(request, product_id):
+    return web_product_update_ajax(_force_ajax_request(request), product_id)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_offer_delete_api(request, product_id):
+    return web_product_delete_ajax(_force_ajax_request(request), product_id)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_offer_toggle_api(request, product_id):
+    return web_product_toggle_ajax(_force_ajax_request(request), product_id)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_offer_update_stock_api(request, product_id):
+    return web_product_update_stock_ajax(_force_ajax_request(request), product_id)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def mobile_offers_list_api(request):
+    return web_offers_list_ajax(_force_ajax_request(request))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_branch_create_api(request):
+    return web_branch_create_ajax(_force_ajax_request(request))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_branch_update_api(request, branch_id):
+    return web_branch_update_ajax(_force_ajax_request(request), branch_id)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_branch_toggle_api(request, branch_id):
+    return web_branch_toggle_status_ajax(_force_ajax_request(request), branch_id)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_branch_delete_api(request, branch_id):
+    return web_branch_delete_ajax(_force_ajax_request(request), branch_id)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_brand_create_api(request):
+    return web_brand_create_ajax(_force_ajax_request(request))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def mobile_brand_get_api(request, brand_id):
+    return web_brand_get_ajax(_force_ajax_request(request), brand_id)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_brand_update_api(request, brand_id):
+    return web_brand_update_ajax(_force_ajax_request(request), brand_id)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_brand_delete_api(request, brand_id):
+    return web_brand_delete_ajax(_force_ajax_request(request), brand_id)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_user_create_api(request):
+    return web_user_create_ajax(_force_ajax_request(request))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def mobile_user_get_api(request, user_id):
+    return web_get_user_data(_force_ajax_request(request), user_id)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_user_update_api(request, user_id):
+    return web_user_update_ajax(_force_ajax_request(request), user_id)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_user_update_status_api(request, user_id):
+    return web_user_update_status_ajax(_force_ajax_request(request), user_id)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mobile_user_delete_api(request, user_id):
+    return web_user_delete_ajax(_force_ajax_request(request), user_id)

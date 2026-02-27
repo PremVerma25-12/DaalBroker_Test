@@ -134,6 +134,93 @@
     width: 140px;
     min-width: 140px;
 }
+      .btn-view {
+        background-color: var(--evt-blue);
+        color: var(--evt-blue-text);
+      }
+      .btn-edit {
+        background-color: var(--evt-orange);
+        color: var(--evt-orange-text);
+      }
+      .btn-delete {
+        background-color: #ffebee;
+        color: #ef5350;
+      }
+
+      .btn-action:hover {
+        transform: translateY(-2px);
+      }
+
+      .action-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .action-group form {
+        margin: 0;
+        display: inline-flex;
+      }
+
+      .action-btn {
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid transparent;
+        padding: 0 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: all 0.2s ease;
+      }
+
+      .action-btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .action-btn-primary {
+        background-color: var(--btn-color);
+        border-color: var(--btn-color);
+        color: #ffffff;
+      }
+
+      .action-btn-secondary {
+        background-color: var(--evt-blue);
+        color: var(--evt-blue-text);
+      }
+
+      .action-btn-warning {
+        background-color: var(--evt-orange);
+        color: var(--evt-orange-text);
+      }
+
+      .action-btn-success {
+        background-color: var(--evt-green);
+        color: var(--evt-green-text);
+      }
+
+      .action-btn-danger {
+        background-color: #ffebee;
+        color: #ef5350;
+      }
+
+      .action-btn-neutral {
+        background-color: #f1f5f9;
+        color: #475569;
+      }
+
+      .action-input {
+        height: 34px;
+        min-width: 96px;
+        border-radius: 10px;
+        padding: 4px 10px;
+      }
 </style>
 
 <div class="table-responsive card product-table-wrap">
@@ -189,18 +276,17 @@
                     <div class="action-group">
                         <a class="action-btn action-btn-primary" href="{% url 'product_list' %}?manage_product={{ product.id }}#manage-interest-block">
                             <i class="fa-solid fa-gears"></i>
-                            Manage
                         </a>
                         {% if is_seller_user or is_admin_user %}
                         <a class="action-btn action-btn-warning" href="{% url 'product_list' %}?edit_product={{ product.id }}">
                             <i class="fa-solid fa-pen-to-square"></i>
-                            Edit
+                      
                         </a>
                         <form method="post" action="{% url 'product_delete_ajax' product.id %}">
                             {% csrf_token %}
                             <button type="submit" class="action-btn action-btn-danger">
                                 <i class="fa-solid fa-trash"></i>
-                                Delete
+                             
                             </button>
                         </form>
                         <form method="post" action="{% url 'product_toggle_ajax' product.id %}">
@@ -208,7 +294,7 @@
                             <input type="hidden" name="is_active" value="{% if product.is_active %}0{% else %}1{% endif %}">
                             <button type="submit" class="action-btn action-btn-neutral">
                                 <i class="fa-solid {% if product.is_active %}fa-eye-slash{% else %}fa-eye{% endif %}"></i>
-                                {% if product.is_active %}Hide{% else %}Show{% endif %}
+                                {% if product.is_active %}{% else %}{% endif %}
                             </button>
                         </form>
                         <form method="post" action="{% url 'product_update_stock_ajax' product.id %}" class="action-group">
@@ -217,7 +303,7 @@
                             <input type="number" name="quantity" class="form-control form-control-sm action-input" min="0.01" step="0.01" placeholder="Add Stock">
                             <button type="submit" class="action-btn action-btn-secondary">
                                 <i class="fa-solid fa-layer-group"></i>
-                                Stock
+                               
                             </button>
                         </form>
                         {% endif %}

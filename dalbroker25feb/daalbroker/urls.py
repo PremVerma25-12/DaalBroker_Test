@@ -23,8 +23,8 @@ from Api import views
 urlpatterns = [
     path('api/auth/session-token/', views.session_token_api, name='session_token'),
     path('admin/', admin.site.urls),
-    path('',include('brokers_app.urls')),
     path('api/',include('Api.urls')), 
+    path('',include('brokers_app.urls')),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root = settings.MEDIA_ROOT)

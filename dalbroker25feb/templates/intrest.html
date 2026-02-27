@@ -98,6 +98,27 @@
     color: #f59e0b;
 }
 
+.product-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.product-table {
+    min-width: 1520px;
+}
+.product-table th,
+.product-table td {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+.product-table .action-group {
+    flex-wrap: nowrap;
+    align-items: center;
+}
+.product-table .action-input {
+    width: 140px;
+    min-width: 140px;
+}
+
 /* Title */
 .deal-stat-title {
     font-size: 0.85rem;
@@ -299,11 +320,11 @@
                     <div class="action-group" role="group" aria-label="Contract actions">
                         <button type="button" class="action-btn action-btn-secondary view-contract"
                                 data-contract-id="{{ contract.id }}">
-                            <i class="fas fa-eye"></i> Show
+                            <i class="fa-regular fa-eye"></i> 
                         </button>
                         <button type="button" class="action-btn action-btn-warning edit-contract"
                                 data-contract-id="{{ contract.id }}">
-                            <i class="fas fa-edit"></i> Edit
+                            <i class="fa-solid fa-pencil"></i>
                         </button>
                     </div>
                 </td>

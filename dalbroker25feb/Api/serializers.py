@@ -1026,6 +1026,8 @@ class RegistrationSerializer(serializers.Serializer):
         pan_number = attrs.get('pan_number')
         gst_number = attrs.get('gst_number')
         adharcard_image = attrs.get('adharcard_image')
+        pan_image = attrs.get('pan_image')
+
 
         for field_name in ('pan_image', 'gst_image', 'shopact_image', 'adharcard_image'):
             uploaded = attrs.get(field_name)
@@ -1038,6 +1040,9 @@ class RegistrationSerializer(serializers.Serializer):
                 raise serializers.ValidationError({field_name: 'File size must be no more than 2MB.'})
 
         if not adharcard_image:
+            raise serializers.ValidationError({'adharcard_image': 'Aadhaar Card document is required.'})
+
+        if not pan_image:
             raise serializers.ValidationError({'adharcard_image': 'Aadhaar Card document is required.'})
 
         if pan_number and gst_number and gst_number[2:12] != pan_number:
