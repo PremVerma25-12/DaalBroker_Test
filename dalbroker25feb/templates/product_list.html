@@ -14,9 +14,6 @@
 
     <div class="d-flex justify-content-between align-items-center">
         <h1 class="page-title">Product List</h1>
-        {% if is_seller_user or is_admin_user %}
-        <a href="{% url 'product_create' %}" class="btn btn-primary">+ Add Product</a>
-        {% endif %}
     </div>
 </div>
 
@@ -30,35 +27,6 @@
     {% endfor %}
 </div>
 {% endif %}
-
-<style>
-.product-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    justify-content: flex-start;
-}
-.product-actions form {
-    margin: 0;
-    display: inline-flex;
-}
-.product-actions .btn,
-.product-actions .form-control-sm {
-    height: 36px;
-    border-radius: 10px;
-    white-space: nowrap;
-}
-.stock-form {
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-    flex-wrap: nowrap;
-}
-.stock-form input {
-    width: 92px;
-}
-</style>
 
 <form method="get" class="card p-3 mb-3">
     <div class="row g-2 align-items-center">
@@ -96,8 +64,8 @@
             </select>
         </div>
         <div class="{% if is_admin_user %}col-md-3{% else %}col-md-4{% endif %} d-flex gap-2">
-            <button type="submit" class="btn btn-primary w-100">Apply</button>
-            <a href="{% url 'product_list' %}" class="btn btn-outline-secondary w-100">Reset</a>
+            <button type="submit" class="btn btn-dal w-100">Apply</button>
+            <a href="{% url 'product_list' %}" class="btn btn-outline-dal w-100">Reset</a>
         </div>
     </div>
 </form>
@@ -137,16 +105,39 @@
             <div class="col-md-3"><label class="form-label">Loading From *</label><input type="text" name="loading_from" class="form-control" value="{{ edit_product.loading_from|default:'' }}" required></div>
             <div class="col-md-3"><label class="form-label">Loading To *</label><input type="text" name="loading_to" class="form-control" value="{{ edit_product.loading_to|default:'' }}" required></div>
             <div class="col-md-12 d-flex justify-content-end gap-2">
-                <a href="{% url 'product_list' %}" class="btn btn-outline-secondary">Cancel</a>
-                <button type="submit" class="btn btn-primary">Update Product</button>
+                <a href="{% url 'product_list' %}" class="btn btn-outline-dal">Cancel</a>
+                <button type="submit" class="btn btn-dal">Update Product</button>
             </div>
         </div>
     </form>
 </div>
 {% endif %}
 
-<div class="table-responsive card">
-    <table class="table table-hover align-middle mb-0">
+<style>
+.product-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.product-table {
+    min-width: 1520px;
+}
+.product-table th,
+.product-table td {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+.product-table .action-group {
+    flex-wrap: nowrap;
+    align-items: center;
+}
+.product-table .action-input {
+    width: 140px;
+    min-width: 140px;
+}
+</style>
+
+<div class="table-responsive card product-table-wrap">
+    <table class="table table-custom align-middle mb-0 product-table">
         <thead>
             <tr>
                 <th>Title</th>
@@ -189,29 +180,45 @@
                     {% endif %}
                 </td>
                 <td>
-                    <a href="{% url 'product_list' %}?manage_product={{ product.id }}#manage-interest-block" class="btn btn-sm btn-outline-primary">
+                    <a href="{% url 'product_list' %}?manage_product={{ product.id }}#manage-interest-block" class="action-btn action-btn-secondary">
+                        <i class="fa-solid fa-heart"></i>
                         {{ product.interested_count|default:0 }}
                     </a>
                 </td>
                 <td>
-                    <div class="product-actions">
-                        <a class="btn btn-sm btn-primary" href="{% url 'product_list' %}?manage_product={{ product.id }}#manage-interest-block">Manage</a>
+                    <div class="action-group">
+                        <a class="action-btn action-btn-primary" href="{% url 'product_list' %}?manage_product={{ product.id }}#manage-interest-block">
+                            <i class="fa-solid fa-gears"></i>
+                            Manage
+                        </a>
                         {% if is_seller_user or is_admin_user %}
-                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'product_list' %}?edit_product={{ product.id }}">Edit</a>
+                        <a class="action-btn action-btn-warning" href="{% url 'product_list' %}?edit_product={{ product.id }}">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                            Edit
+                        </a>
                         <form method="post" action="{% url 'product_delete_ajax' product.id %}">
                             {% csrf_token %}
-                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                            <button type="submit" class="action-btn action-btn-danger">
+                                <i class="fa-solid fa-trash"></i>
+                                Delete
+                            </button>
                         </form>
                         <form method="post" action="{% url 'product_toggle_ajax' product.id %}">
                             {% csrf_token %}
                             <input type="hidden" name="is_active" value="{% if product.is_active %}0{% else %}1{% endif %}">
-                            <button type="submit" class="btn btn-sm btn-outline-dark">{% if product.is_active %}Hide{% else %}Show{% endif %}</button>
+                            <button type="submit" class="action-btn action-btn-neutral">
+                                <i class="fa-solid {% if product.is_active %}fa-eye-slash{% else %}fa-eye{% endif %}"></i>
+                                {% if product.is_active %}Hide{% else %}Show{% endif %}
+                            </button>
                         </form>
-                        <form method="post" action="{% url 'product_update_stock_ajax' product.id %}" class="stock-form">
+                        <form method="post" action="{% url 'product_update_stock_ajax' product.id %}" class="action-group">
                             {% csrf_token %}
                             <input type="hidden" name="mode" value="add">
-                            <input type="number" name="quantity" class="form-control form-control-sm" min="0.01" step="0.01" placeholder="Add Stock">
-                            <button type="submit" class="btn btn-sm btn-warning">Stock</button>
+                            <input type="number" name="quantity" class="form-control form-control-sm action-input" min="0.01" step="0.01" placeholder="Add Stock">
+                            <button type="submit" class="action-btn action-btn-secondary">
+                                <i class="fa-solid fa-layer-group"></i>
+                                Stock
+                            </button>
                         </form>
                         {% endif %}
                     </div>
@@ -246,12 +253,12 @@
         <div class="col-md-3"><label class="form-label">Loading To *</label><input type="text" name="loading_to" class="form-control" required></div>
         <div class="col-md-3"><label class="form-label">Delivery Date *</label><input type="date" name="delivery_date" class="form-control" required></div>
         <div class="col-md-6"><label class="form-label">Condition (Remark)</label><input type="text" name="buyer_remark" class="form-control"></div>
-        <div class="col-md-3 d-flex align-items-end"><button type="submit" class="btn btn-primary w-100">Submit Offer</button></div>
+        <div class="col-md-3 d-flex align-items-end"><button type="submit" class="btn btn-dal w-100">Submit Offer</button></div>
     </form>
     {% endif %}
 
     <div class="table-responsive">
-        <table class="table table-sm table-hover">
+        <table class="table table-custom table-sm">
             <thead>
                 <tr>
                     <th>Interested Code</th>
@@ -267,27 +274,36 @@
                     <td>&#8377;{{ interest.buyer_offered_amount }}</td>
                     <td>{{ interest.status }}</td>
                     <td>
-                        <div class="d-flex flex-wrap gap-1">
-                            {% if interest.status == 'interested' and is_seller_user %}
-                            <form method="post" action="{% url 'product_accept_buyer_ajax' manage_product.id %}" class="d-flex gap-1">
+                        <div class="action-group">
+                            {% if interest.status == 'interested' and is_seller_user or interest.status == 'interested' and is_admin_user %}
+                            <form method="post" action="{% url 'product_accept_buyer_ajax' manage_product.id %}" class="action-group">
                                 {% csrf_token %}
                                 <input type="hidden" name="interest_id" value="{{ interest.id }}">
-                                <input type="text" name="seller_remark" class="form-control form-control-sm" placeholder="Remark">
-                                <button type="submit" class="btn btn-sm btn-success">Accept</button>
+                                <input type="text" name="seller_remark" class="form-control form-control-sm action-input" placeholder="Remark">
+                                <button type="submit" class="action-btn action-btn-success">
+                                    <i class="fa-solid fa-check"></i>
+                                    Accept
+                                </button>
                             </form>
-                            <form method="post" action="{% url 'product_reject_buyer_ajax' manage_product.id %}" class="d-flex gap-1">
+                            <form method="post" action="{% url 'product_reject_buyer_ajax' manage_product.id %}" class="action-group">
                                 {% csrf_token %}
                                 <input type="hidden" name="interest_id" value="{{ interest.id }}">
-                                <input type="text" name="seller_remark" class="form-control form-control-sm" placeholder="Remark">
-                                <button type="submit" class="btn btn-sm btn-danger">Reject</button>
+                                <input type="text" name="seller_remark" class="form-control form-control-sm action-input" placeholder="Remark">
+                                <button type="submit" class="action-btn action-btn-danger">
+                                    <i class="fa-solid fa-xmark"></i>
+                                    Reject
+                                </button>
                             </form>
                             {% endif %}
                             {% if is_admin_user and interest.status == 'seller_confirmed' %}
-                            <form method="post" action="{% url 'product_confirm_deal_ajax' manage_product.id %}" class="d-flex gap-1">
+                            <form method="post" action="{% url 'product_confirm_deal_ajax' manage_product.id %}" class="action-group">
                                 {% csrf_token %}
                                 <input type="hidden" name="interest_id" value="{{ interest.id }}">
-                                <input type="text" name="admin_remark" class="form-control form-control-sm" placeholder="Admin remark">
-                                <button type="submit" class="btn btn-sm btn-primary">Confirm Deal</button>
+                                <input type="text" name="admin_remark" class="form-control form-control-sm action-input" placeholder="Admin remark">
+                                <button type="submit" class="action-btn action-btn-primary">
+                                    <i class="fa-solid fa-circle-check"></i>
+                                    Confirm Deal
+                                </button>
                             </form>
                             {% endif %}
                         </div>

@@ -35,7 +35,13 @@ from Api.utils import (
     send_welcome_credentials_email_async,
     should_send_suspension_email,
 )
-from .utils import action_allowed_or_json, can_user_perform_action
+from .utils import (
+    action_allowed_or_json,
+    can_user_perform_action,
+    get_user_status,
+    normalize_user_status,
+    get_contract_display_ids,
+)
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
@@ -50,11 +56,100 @@ ALLOWED_DOCUMENT_CONTENT_TYPES = {'image/jpeg', 'image/png', 'application/pdf'}
 #===========end=================
 
 DEFAULT_PAGE_SIZE = 10
+USER_STATUS_ACTIVE = 'active'
+USER_STATUS_DEACTIVATED = 'deactivated'
+USER_STATUS_SUSPENDED = 'suspended'
+VALID_USER_STATUSES = {USER_STATUS_ACTIVE, USER_STATUS_DEACTIVATED, USER_STATUS_SUSPENDED}
+PENDING_INTEREST_STATUSES = (
+    ProductInterest.STATUS_INTERESTED,
+    ProductInterest.STATUS_SELLER_CONFIRMED,
+)
 
 
 def _run_in_background(fn, *args, **kwargs):
     thread = Thread(target=fn, args=args, kwargs=kwargs, daemon=True)
     thread.start()
+
+
+def _effective_user_status(user):
+    return normalize_user_status(get_user_status(user))
+
+
+def _format_loading_field(value, date_fmt='%Y-%m-%d'):
+    """
+    loading_from/loading_to can be date objects or plain strings depending on
+    legacy data and code path. Always return a safe display string.
+    """
+    if value in (None, ''):
+        return ''
+    if hasattr(value, 'strftime'):
+        try:
+            return value.strftime(date_fmt)
+        except Exception:
+            pass
+    return str(value)
+
+
+def _apply_user_status(user, next_status, suspension_reason=''):
+    normalized_status = normalize_user_status(next_status)
+    normalized_reason = (suspension_reason or '').strip()
+
+    user.status = normalized_status
+    user.account_status = normalized_status
+
+    if normalized_status == USER_STATUS_ACTIVE:
+        user.is_active = True
+        user.deactivated_at = None
+        user.suspended_at = None
+        user.suspension_reason = ''
+        return
+
+    user.is_active = False
+    if normalized_status == USER_STATUS_DEACTIVATED:
+        user.deactivated_at = user.deactivated_at or timezone.now()
+        user.suspended_at = None
+        user.suspension_reason = ''
+        return
+
+    user.suspended_at = user.suspended_at or timezone.now()
+    user.deactivated_at = None
+    user.suspension_reason = normalized_reason
+
+
+def _safe_user_document_url(file_field):
+    """
+    Return a usable URL for a user document field.
+    If the stored file path is missing, try legacy document folders by basename.
+    """
+    if not file_field:
+        return ''
+
+    file_name = str(getattr(file_field, 'name', '') or '').strip()
+    storage = getattr(file_field, 'storage', None)
+    if not file_name or not storage:
+        return ''
+
+    try:
+        if storage.exists(file_name):
+            return file_field.url
+    except Exception:
+        return ''
+
+    # Backward compatibility: some rows point to user_documents/* while files
+    # may still exist in older folders from previous upload_to values.
+    basename = os.path.basename(file_name)
+    if not basename:
+        return ''
+
+    for legacy_prefix in ('pan_images', 'gst_images', 'profile'):
+        legacy_name = f'{legacy_prefix}/{basename}'
+        try:
+            if storage.exists(legacy_name):
+                return f'{settings.MEDIA_URL}{legacy_name}'
+        except Exception:
+            continue
+
+    return ''
 
 
 def _build_pagination_window(page_obj):
@@ -131,26 +226,32 @@ def _is_buyer_user(user):
         )
     )
 
-def _check_admin_seller_buyer(user):
-    """Check if user is admin, seller, or buyer"""
+def _check_admin_seller_buyer(user, module=None, action='read'):
+    """Check if user is admin/seller/buyer or has explicit module permission."""
     if not user or not user.is_authenticated:
         return False, "Please login first."
+    if module and has_permission(user, module, action):
+        return True, None
     if _is_admin_user(user) or _is_seller_user(user) or _is_buyer_user(user):
         return True, None
     return False, "You don't have permission to access this page."
 
-def _check_admin_only(user):
-    """Check if user is admin (for page access)"""
+def _check_admin_only(user, module=None, action='read'):
+    """Check if user is admin or has explicit module permission."""
     if not user or not user.is_authenticated:
         return False, "Please login first."
+    if module and has_permission(user, module, action):
+        return True, None
     if _is_admin_user(user):
         return True, None
     return False, "This page is accessible only to Admin."
 
-def _check_admin_seller(user):
-    """Check if user is admin or seller"""
+def _check_admin_seller(user, module=None, action='read'):
+    """Check if user is admin/seller or has explicit module permission."""
     if not user or not user.is_authenticated:
         return False, "Please login first."
+    if module and has_permission(user, module, action):
+        return True, None
     if _is_admin_user(user) or _is_seller_user(user):
         return True, None
     return False, "This page is accessible only to Admin or Seller."
@@ -231,7 +332,16 @@ class MobileAuthenticationForm(forms.Form):
 
 # Helper function to check if user is superuser
 def is_superuser(user):
-    return user.is_authenticated and (user.is_superuser or user.is_staff or user.is_admin)
+    return bool(user and user.is_authenticated and (
+        user.is_superuser or
+        user.is_staff or
+        user.is_admin or
+        getattr(user, 'role', '') == 'super_admin' or
+        any(
+            has_permission(user, 'user_management', action_name)
+            for action_name in ('read', 'create', 'update', 'delete')
+        )
+    ))
 
 
 def _dashboard_restriction_context(user):
@@ -359,6 +469,13 @@ def _products_for_user(user):
     if user.is_staff:
         return _base_product_queryset()
     
+    # Role-permission fallback: allow full product visibility when explicitly granted.
+    if any(
+        has_permission(user, 'product_management', action_name)
+        for action_name in ('read', 'create', 'update', 'delete')
+    ):
+        return _base_product_queryset()
+    
     # Sellers can only see their own products
     if user.is_seller or user.role in ('seller', 'both_sellerandbuyer'):
         return _base_product_queryset().filter(seller=user)
@@ -373,6 +490,11 @@ def _products_for_user(user):
 def _product_images_for_user(user):
     queryset = ProductImage.objects.select_related('product', 'product__seller').order_by('-created_at')
     if _is_admin_user(user):
+        return queryset
+    if any(
+        has_permission(user, 'product_image_management', action_name)
+        for action_name in ('read', 'create', 'update', 'delete')
+    ):
         return queryset
     if _is_seller_user(user):
         return queryset.filter(product__seller=user)
@@ -448,7 +570,7 @@ def _product_response_data(product):
     
     interested_buyers = [
         _interest_response_data(i, user) for i in interests
-        if i.status == ProductInterest.STATUS_INTERESTED and i.is_active
+        if i.status in PENDING_INTEREST_STATUSES and i.is_active
     ]
     
     my_interest = None
@@ -482,8 +604,8 @@ def _product_response_data(product):
         'remaining_quantity': str(product.remaining_quantity) if product.remaining_quantity else None,
         'available_quantity': str(product.remaining_quantity if product.remaining_quantity is not None else (product.original_quantity or 0)),
         'quantity_unit': product.quantity_unit,
-        'loading_from': product.loading_from,
-        'loading_to': product.loading_to,
+        'loading_from': _format_loading_field(product.loading_from),
+        'loading_to': _format_loading_field(product.loading_to),
         'loading_location': product.loading_location,
         'remark': product.remark or '',
         'is_active': product.is_active,
@@ -509,6 +631,8 @@ def _actor_unique_id(user):
 def _can_manage_brand(user, action):
     if not user or not user.is_authenticated:
         return False
+    if has_permission(user, 'brand_management', action):
+        return True
     role = (getattr(user, 'role', '') or '').strip().lower()
     if action == 'read':
         return role in {'buyer', 'admin', 'super_admin'}
@@ -551,8 +675,8 @@ def _resolve_seller_for_write(request, payload, current_seller=None):
 def _parse_product_payload(payload):
     title = (payload.get('title') or '').strip()
     description = (payload.get('description') or '').strip()
-    loading_from = (payload.get('loading_from') or '').strip()
-    loading_to = (payload.get('loading_to') or '').strip()
+    loading_from_str = (payload.get('loading_from') or '').strip()
+    loading_to_str = (payload.get('loading_to') or '').strip()
     loading_location = (payload.get('loading_location') or '').strip()
     remark = (payload.get('remark') or '').strip()
     category_id = payload.get('category_id')
@@ -565,14 +689,20 @@ def _parse_product_payload(payload):
         return None, 'Product title is required.'
     if not category_id:
         return None, 'Category is required.'
-    if not loading_from:
-        return None, 'Loading from is required.'
-    if not loading_to:
-        return None, 'Loading to is required.'
+    if not loading_from_str:
+        return None, 'Loading from date is required.'
+    if not loading_to_str:
+        return None, 'Loading to date is required.'
     if amount_raw in (None, ''):
         return None, 'Amount is required.'
     if amount_unit not in {'kg', 'ton', 'qtl'}:
         return None, 'Amount unit must be KG, TON, or QTL.'
+
+    try:
+        loading_from = datetime.strptime(loading_from_str, '%Y-%m-%d').date()
+        loading_to = datetime.strptime(loading_to_str, '%Y-%m-%d').date()
+    except ValueError:
+        return None, 'Invalid date format for loading dates. Use YYYY-MM-DD.'
 
     try:
         amount = Decimal(str(amount_raw))
@@ -593,7 +723,7 @@ def _parse_product_payload(payload):
             return None, 'Selected brand is inactive.'
 
     if not loading_location:
-        loading_location = f'{loading_from} -> {loading_to}'
+        loading_location = f'{loading_from.strftime("%Y-%m-%d")} -> {loading_to.strftime("%Y-%m-%d")}'
 
     return {
         'title': title,
@@ -678,6 +808,73 @@ def _send_deal_confirmation_emails(product, buyer, seller):
             logger.exception('Deal-complete email to seller failed user_id=%s product_id=%s', seller.id, product.id)
 
 
+def _send_contract_confirmation_email_to_admins(contract, product, interest):
+    """Send deal-confirmation email to all active admin/superadmin accounts."""
+    dated = timezone.now().strftime('%d/%m/%Y')
+    ref_no = f"{contract.contract_id} : {dated}"
+    seller_name = product.seller.company_name or product.seller.username
+    seller_location = product.loading_location.split(' -> ')[0] if product.loading_location else ''
+    seller_display = f"{seller_name}, {seller_location}" if seller_location else seller_name
+    buyer_name = interest.buyer.company_name or interest.buyer.username
+    buyer_display = f"{buyer_name} ({interest.buyer.username}) Pvt Ltd"
+    item = product.title
+    qty = f"{str(interest.buyer_required_quantity)}k {str(interest.buyer_required_quantity / 100)}q"
+    rate = str(interest.buyer_offered_amount)
+    loading_from = interest.loading_from or product.loading_from
+    loading_to = interest.loading_to or product.loading_to
+    loading_from_text = _format_loading_field(loading_from, '%d/%m/%Y')
+    loading_to_text = _format_loading_field(loading_to, '%d/%m/%Y')
+    loading_dates = f"{loading_from_text} To {loading_to_text}" if loading_from_text and loading_to_text else 'N/A'
+    condition = interest.buyer_remark or 'N/A'
+
+    email_body = f"""Jhawar Business Consulting Solutions
+
+Ref No : {ref_no}
+Seller : {seller_display}
+Buyer : {buyer_display}
+Item : {item}
+Qty : {qty}
+Rate : {rate}
+Loading From {loading_dates}
+Condition : {condition}
+"""
+    recipient_list = list(
+        DaalUser.objects.filter(
+            Q(role__in=['admin', 'super_admin'])
+            | Q(is_superuser=True)
+            | Q(is_admin=True)
+            | Q(is_staff=True),
+            is_active=True,
+            email__isnull=False,
+        )
+        .exclude(email='')
+        .values_list('email', flat=True)
+        .distinct()
+    )
+    if not recipient_list:
+        logger.warning('No active admin emails found for deal-confirm notification contract_id=%s', contract.contract_id)
+        return 0
+
+    try:
+        sent_count = send_mail(
+            subject='Jhawar Business Consulting Solutions - Deal Confirmed',
+            message=email_body,
+            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+            recipient_list=recipient_list,
+            fail_silently=False,
+        )
+        logger.info(
+            'Deal-confirm email dispatched contract_id=%s sent_count=%s recipients=%s',
+            contract.contract_id,
+            sent_count,
+            recipient_list,
+        )
+        return sent_count
+    except Exception:
+        logger.exception('Failed to send deal-confirm email to admins contract_id=%s', contract.contract_id)
+        return 0
+
+
 def _send_seller_confirmed_email_to_buyer(product, buyer, seller):
     """Send email to buyer when seller confirms interest"""
     if not buyer.email:
@@ -727,10 +924,14 @@ def login_view(request):
             password = form.cleaned_data.get('password')
             user = authenticate(request, mobile=mobile, password=password)
             if user is not None:
-                if getattr(user, 'account_status', 'active') == 'suspended':
+                current_status = _effective_user_status(user)
+                if current_status == USER_STATUS_SUSPENDED:
                     if should_send_suspension_email(user.id):
                         send_account_suspended_email_async(user.email, getattr(user, 'suspension_reason', ''))
                     messages.error(request, 'Your account has been suspended. Check your email.')
+                    return render(request, 'login.html', {'form': form})
+                if current_status == USER_STATUS_DEACTIVATED:
+                    messages.error(request, 'Your account has been deactivated. Please contact admin.')
                     return render(request, 'login.html', {'form': form})
                 login(request, user)
                 if user.is_staff or user.is_admin or user.is_superuser:
@@ -1150,14 +1351,15 @@ def tag_master_view(request):
 
 @login_required
 def user_list_view(request):
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='user_management', action='read')
     if not allowed:
         messages.error(request, msg or 'You do not have permission to view users.')
         return redirect('dashboard')
     
     search = (request.GET.get('search') or '').strip()
     role_filter = (request.GET.get('role') or 'all').strip().lower()
-    account_status_filter = (request.GET.get('account_status') or 'all').strip().lower()
+    status_filter_raw = (request.GET.get('status') or request.GET.get('account_status') or 'all').strip().lower()
+    status_filter = normalize_user_status(status_filter_raw) if status_filter_raw != 'all' else 'all'
 
     # Exclude superusers from the list
     users_qs = DaalUser.objects.filter(is_superuser=False).prefetch_related('tags')
@@ -1175,9 +1377,14 @@ def user_list_view(request):
     if role_filter != 'all' and role_filter in valid_roles:
         users_qs = users_qs.filter(role=role_filter)
 
-    valid_account_statuses = {'active', 'deactive', 'suspended'}
-    if account_status_filter != 'all' and account_status_filter in valid_account_statuses:
-        users_qs = users_qs.filter(account_status=account_status_filter)
+    if status_filter != 'all' and status_filter in VALID_USER_STATUSES:
+        if status_filter == USER_STATUS_DEACTIVATED:
+            users_qs = users_qs.filter(
+                Q(status__in=[USER_STATUS_DEACTIVATED, 'deactive'])
+                | Q(account_status__in=[USER_STATUS_DEACTIVATED, 'deactive'])
+            )
+        else:
+            users_qs = users_qs.filter(Q(status=status_filter) | Q(account_status=status_filter))
 
     users_qs = users_qs.order_by('-date_joined')
     page_obj, pagination = _paginate_queryset(request, users_qs)
@@ -1190,7 +1397,8 @@ def user_list_view(request):
         'filters': {
             'search': search,
             'role': role_filter,
-            'account_status': account_status_filter,
+            'status': status_filter,
+            'account_status': status_filter,
         },
         'page_obj': page_obj,
         'pagination': pagination,
@@ -1199,7 +1407,7 @@ def user_list_view(request):
 
 @login_required
 def user_create_view(request):
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='user_management', action='create')
     if not allowed:
         messages.error(request, msg or 'You do not have permission to create users.')
         return redirect('dashboard')
@@ -1298,7 +1506,7 @@ def user_create_view(request):
 
 
 def user_update_view(request, user_id):
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='user_management', action='update')
     if not allowed:
         messages.error(request, msg or 'You do not have permission to update users.')
         return redirect('dashboard')
@@ -1400,7 +1608,7 @@ def user_update_view(request, user_id):
 
 
 def user_delete_view(request, user_id):
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='user_management', action='delete')
     if not allowed:
         messages.error(request, msg or 'You do not have permission to delete users.')
         return redirect('dashboard')
@@ -1449,7 +1657,7 @@ def _safe_category_full_path(category):
 
 @login_required
 def category_list_view(request):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='category_management', action='read')
     if not allowed:
         messages.error(request, msg or 'You do not have permission to view categories.')
         return redirect('dashboard')
@@ -1467,7 +1675,7 @@ def category_list_view(request):
 
 
 def category_create_ajax(request):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='category_management', action='create')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -1532,7 +1740,7 @@ def category_create_ajax(request):
 @login_required
 @require_http_methods(["GET", "PUT", "PATCH", "POST", "DELETE"])
 def category_get_ajax(request, category_id):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='category_management', action='read')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -1564,6 +1772,11 @@ def category_get_ajax(request, category_id):
     blocked = action_allowed_or_json(request)
     if blocked:
         return blocked
+
+    required_action = 'update' if request.method in ('PUT', 'PATCH', 'POST') else 'delete'
+    allowed, msg = _check_admin_seller(request.user, module='category_management', action=required_action)
+    if not allowed:
+        return JsonResponse({'success': False, 'message': msg}, status=403)
 
     if request.method in ('PUT', 'PATCH', 'POST'):
         try:
@@ -1628,7 +1841,7 @@ def category_get_ajax(request, category_id):
 
 
 def category_update_ajax(request, category_id):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='category_management', action='update')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -1708,7 +1921,7 @@ def category_update_ajax(request, category_id):
 
 
 def category_delete_ajax(request, category_id):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='category_management', action='delete')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -1740,7 +1953,7 @@ def category_delete_ajax(request, category_id):
 
 
 def category_tree_ajax(request):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='category_management', action='read')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -1762,7 +1975,7 @@ def category_tree_ajax(request):
 
 
 def category_children_ajax(request, parent_id):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='category_management', action='read')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -1794,7 +2007,7 @@ def category_children_ajax(request, parent_id):
 
 
 def category_path_ajax(request, category_id):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='category_management', action='read')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -1828,7 +2041,7 @@ def category_path_ajax(request, category_id):
 
 
 def category_search_ajax(request):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='category_management', action='read')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -1882,7 +2095,7 @@ def category_search_ajax(request):
 # ===================== SUBCATEGORY MANAGEMENT =====================
 
 def subcategory_list_view(request):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='subcategory_management', action='read')
     if not allowed:
         messages.error(request, msg or 'You do not have permission to view subcategories.')
         return redirect('dashboard')
@@ -1901,7 +2114,7 @@ def subcategory_list_view(request):
 
 
 def subcategory_create_ajax(request):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='subcategory_management', action='create')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -1956,7 +2169,7 @@ def subcategory_create_ajax(request):
 
 @login_required
 def subcategory_get_ajax(request, subcategory_id):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='subcategory_management', action='read')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -1981,7 +2194,7 @@ def subcategory_get_ajax(request, subcategory_id):
 
 
 def subcategory_update_ajax(request, subcategory_id):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='subcategory_management', action='update')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
 
@@ -2056,7 +2269,7 @@ def subcategory_update_ajax(request, subcategory_id):
 
 
 def subcategory_delete_ajax(request, subcategory_id):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='subcategory_management', action='delete')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -2093,7 +2306,7 @@ def subcategory_delete_ajax(request, subcategory_id):
 def brand_list_view(request):
     if not request.user.is_authenticated:
         return redirect('login')
-    allowed, msg = _check_admin_seller_buyer(request.user)
+    allowed, msg = _check_admin_seller_buyer(request.user, module='brand_management', action='read')
     if not allowed:
         messages.error(request, msg)
         return redirect('dashboard')
@@ -2116,7 +2329,7 @@ def brand_list_view(request):
 @login_required
 @require_GET
 def brand_get_ajax(request, brand_id):
-    allowed, msg = _check_admin_seller_buyer(request.user)
+    allowed, msg = _check_admin_seller_buyer(request.user, module='brand_management', action='read')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     if not _can_manage_brand(request.user, 'read'):
@@ -2249,7 +2462,7 @@ def brand_delete_ajax(request, brand_id):
 
 @login_required
 def branch_master_view(request):
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='branch_management', action='read')
     if not allowed:
         messages.error(request, msg or 'Permission denied.')
         return redirect('dashboard')
@@ -2265,7 +2478,7 @@ def branch_master_view(request):
 @login_required
 @require_GET
 def location_states_ajax(request):
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='branch_management', action='read')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -2284,7 +2497,7 @@ def location_states_ajax(request):
 @login_required
 @require_GET
 def location_cities_ajax(request):
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='branch_management', action='read')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -2306,7 +2519,7 @@ def location_cities_ajax(request):
 @login_required
 @require_GET
 def location_areas_ajax(request):
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='branch_management', action='read')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -2372,7 +2585,7 @@ def _branch_response_data(branch):
 @login_required
 @require_POST
 def branch_create_ajax(request):
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='branch_management', action='create')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -2410,7 +2623,7 @@ def branch_create_ajax(request):
 @login_required
 @require_POST
 def branch_update_ajax(request, branch_id):
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='branch_management', action='update')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -2454,7 +2667,7 @@ def branch_update_ajax(request, branch_id):
 @login_required
 @require_POST
 def branch_toggle_status_ajax(request, branch_id):
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='branch_management', action='update')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -2488,7 +2701,7 @@ def branch_toggle_status_ajax(request, branch_id):
 @login_required
 @require_POST
 def branch_delete_ajax(request, branch_id):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_only(request.user, module='branch_management', action='delete')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -2512,7 +2725,7 @@ def branch_delete_ajax(request, branch_id):
 
 @login_required
 def product_create_view(request):
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='product_management', action='create')
     if not allowed:
         messages.error(request, msg)
         return redirect('dashboard')
@@ -2540,7 +2753,7 @@ def product_list_view(request):
     # All authenticated users can view
     if not request.user.is_authenticated:
         return redirect('login')
-    allowed, msg = _check_admin_seller_buyer(request.user)
+    allowed, msg = _check_admin_seller_buyer(request.user, module='product_management', action='read')
     if not allowed:
         messages.error(request, msg)
         return redirect('dashboard')
@@ -2617,7 +2830,7 @@ def product_list_view(request):
         pending_count = 0
         my_interest = None
         for interest in product.interests.all():
-            if interest.status == ProductInterest.STATUS_INTERESTED and interest.is_active:
+            if interest.status in PENDING_INTEREST_STATUSES and interest.is_active:
                 pending_count += 1
             if interest.buyer_id == request.user.id:
                 my_interest = interest
@@ -2711,7 +2924,7 @@ def product_create_ajax(request):
         messages.success(request, message)
         return redirect('product_create')
 
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='product_management', action='create')
     if not allowed:
         return _error_response(msg, status=403)
     
@@ -2844,7 +3057,7 @@ def product_update_ajax(request, product_id):
         return redirect('product_list')
 
     # First check basic permissions
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='product_management', action='update')
     if not allowed:
         return _error_response(msg, status=403)
     
@@ -2906,7 +3119,7 @@ def product_delete_ajax(request, product_id):
         messages.success(request, message)
         return redirect('product_list')
 
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='product_management', action='delete')
     if not allowed:
         return _error_response(msg, status=403)
     
@@ -2953,7 +3166,7 @@ def product_toggle_ajax(request, product_id):
         messages.success(request, message)
         return redirect('product_list')
 
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='product_management', action='update')
     if not allowed:
         return _error_response(msg, status=403)
     
@@ -3067,6 +3280,47 @@ def product_show_interest_ajax(request, product_id):
             is_active=True
         )
 
+        # Send email to seller
+        dated = timezone.now().strftime('%d/%m/%Y')
+        seller_name = product.seller.company_name or product.seller.username
+        seller_location = product.loading_location.split(' -> ')[0] if product.loading_location else ''
+        if seller_location:
+            seller_display = f"{seller_name}, {seller_location}"
+        else:
+            seller_display = seller_name
+        buyer_name = interest.buyer.company_name or interest.buyer.username
+        buyer_display = f"{buyer_name} ({request.user.username}) Pvt Ltd"
+        item = product.title
+        qty = f"{str(interest.buyer_required_quantity)}k {str(interest.buyer_required_quantity / 100)}q"
+        rate = str(interest.buyer_offered_amount)
+        condition = interest.buyer_remark or 'N/A'
+        
+        email_body = f"""INTERESTED MESSAGE
+
+Dated : {dated}
+Seller : {seller_display}
+Buyer : {buyer_display}
+Item : {item}
+Qty : {qty}
+Rate : {rate}
+Condition : {condition}
+"""
+        try:
+            admin_emails = DaalUser.objects.filter(
+                Q(role__in=['admin', 'super_admin']) | Q(is_superuser=True),
+                is_active=True,
+                email__isnull=False
+            ).exclude(email='').values_list('email', flat=True)
+            send_mail(
+                subject='INTERESTED MESSAGE',
+                message=email_body,
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+                recipient_list=list(admin_emails),
+                fail_silently=True,
+            )
+        except Exception as e:
+            logger.exception('Failed to send interest email to admins product_id=%s', product.id)
+
     return _success_response('Interest submitted successfully.', interest)
 
 @login_required
@@ -3162,18 +3416,22 @@ def contracts_list_ajax(request):
     # Pagination
     page_obj, pagination = _paginate_queryset(request, contracts, page_size=15)
     
+    is_admin_viewer = _is_admin_user(user)
     data = []
     for contract in page_obj.object_list:
+        party_ids = get_contract_display_ids(contract, user, is_admin=is_admin_viewer)
         data.append({
             'id': contract.id,
             'contract_id': contract.contract_id,
             'product_id': contract.product.id,
             'product_title': contract.product.title,
-            'buyer_id': contract.buyer.id,
+            'buyer_id': party_ids['buyer_id'],
             'buyer_name': contract.buyer.username,
-            'buyer_unique_id': contract.buyer.buyer_unique_id,
-            'seller_id': contract.seller.id,
+            'buyer_unique_id': contract.buyer.buyer_unique_id if (is_admin_viewer or user.id == contract.buyer_id) else None,
+            'seller_id': party_ids['seller_id'],
             'seller_name': contract.seller.username,
+            'display_buyer_id': party_ids['display_buyer_id'],
+            'display_seller_id': party_ids['display_seller_id'],
             'deal_amount': str(contract.deal_amount),
             'deal_quantity': str(contract.deal_quantity),
             'amount_unit': contract.amount_unit,
@@ -3310,6 +3568,8 @@ def contract_detail_ajax(request, contract_id):
     if not (is_admin_or_super_admin or contract.seller == request.user or contract.buyer == request.user):
         return JsonResponse({'success': False, 'message': 'Permission denied.'}, status=403)
 
+    party_ids = get_contract_display_ids(contract, request.user, is_admin=is_admin_or_super_admin)
+
     interest = getattr(contract, 'interest', None)
     seller_quantity = ''
     buyer_offer_amount = ''
@@ -3327,11 +3587,13 @@ def contract_detail_ajax(request, contract_id):
         'contract_id': contract.contract_id,
         'product_id': contract.product.id,
         'product_title': contract.product.title,
-        'buyer_id': contract.buyer.id,
+        'buyer_id': party_ids['buyer_id'],
         'buyer_name': contract.buyer.username,
-        'buyer_unique_id': contract.buyer.buyer_unique_id,
-        'seller_id': contract.seller.id,
+        'buyer_unique_id': contract.buyer.buyer_unique_id if (is_admin_or_super_admin or request.user.id == contract.buyer_id) else None,
+        'seller_id': party_ids['seller_id'],
         'seller_name': contract.seller.username,
+        'display_buyer_id': party_ids['display_buyer_id'],
+        'display_seller_id': party_ids['display_seller_id'],
         'deal_amount': str(contract.deal_amount),
         'deal_quantity': str(contract.deal_quantity),
         'amount_unit': contract.amount_unit,
@@ -3384,8 +3646,8 @@ def product_accept_buyer_ajax(request, product_id):
         messages.success(request, message)
         return redirect(f"{reverse('product_list')}?manage_product={product_id}")
 
-    if not _is_seller_user(request.user):
-        return _error_response('Permission denied.', status=403)
+    if not (_is_seller_user(request.user) or _is_admin_user(request.user)):
+        return _error_response('Only seller or admin can accept interest.', status=403)
 
     try:
         data = json.loads(request.body) if request.content_type == 'application/json' else request.POST.dict()
@@ -3440,7 +3702,7 @@ def product_reject_buyer_ajax(request, product_id):
         messages.success(request, message)
         return redirect(f"{reverse('product_list')}?manage_product={product_id}")
 
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='product_management', action='update')
     if not allowed:
         return _error_response(msg, status=403)
     
@@ -3580,6 +3842,7 @@ def product_confirm_deal_ajax(request, product_id):
                 dirty_fields.append('deal_confirmed_at')
             if dirty_fields:
                 interest.save(update_fields=dirty_fields + ['updated_at'])
+            _send_contract_confirmation_email_to_admins(existing_contract, product, interest)
             return _success_response('Deal already confirmed for this interest.', existing_contract, product, interest)
 
         # Check if enough quantity available for a new confirmation
@@ -3622,6 +3885,9 @@ def product_confirm_deal_ajax(request, product_id):
             is_active=False
         )
 
+        # Notify all active admin recipients
+        _send_contract_confirmation_email_to_admins(contract, product, interest)
+
     return _success_response('Deal confirmed successfully!', contract, product, interest)
 
 
@@ -3650,7 +3916,11 @@ def product_update_stock_ajax(request, product_id):
         messages.success(request, message)
         return redirect('product_list')
 
-    if not (_is_seller_user(request.user) or _is_admin_user(request.user)):
+    if not (
+        _is_seller_user(request.user)
+        or _is_admin_user(request.user)
+        or has_permission(request.user, 'product_management', 'update')
+    ):
         return _error_response('Permission denied.', status=403)
 
     try:
@@ -3683,7 +3953,11 @@ def product_update_stock_ajax(request, product_id):
             return _error_response('Product not found.', status=404)
 
         # Check ownership
-        if product.seller != request.user and not _is_admin_user(request.user):
+        if (
+            product.seller != request.user
+            and not _is_admin_user(request.user)
+            and not has_permission(request.user, 'product_management', 'update')
+        ):
             return _error_response('You can only update your own products.', status=403)
 
         previous_qty = product.remaining_quantity if product.remaining_quantity is not None else (product.original_quantity or Decimal('0'))
@@ -3726,7 +4000,7 @@ def product_buyer_confirm_ajax(request, product_id):
 @login_required
 @require_GET
 def offers_list_ajax(request):
-    allowed, msg = _check_admin_seller_buyer(request.user)
+    allowed, msg = _check_admin_seller_buyer(request.user, module='product_management', action='read')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     user = request.user
@@ -3800,15 +4074,20 @@ def product_image_list_view(request):
     ):
         messages.error(request, 'You do not have permission to view product images.')
         return redirect('dashboard')
-    if not (_is_admin_user(request.user) or _is_seller_user(request.user)):
-        messages.error(request, 'Only admin or seller can view product images.')
+    if not (
+        _is_admin_user(request.user)
+        or _is_seller_user(request.user)
+        or has_permission(request.user, 'product_image_management', 'read')
+        or has_permission(request.user, 'product_management', 'read')
+    ):
+        messages.error(request, 'Permission denied.')
         return redirect('dashboard')
 
     images_qs = _product_images_for_user(request.user)
     page_obj, pagination = _paginate_queryset(request, images_qs)
     images = page_obj.object_list
 
-    if _is_admin_user(request.user):
+    if _is_admin_user(request.user) or has_permission(request.user, 'product_image_management', 'read'):
         products = Product.objects.select_related('seller').all().order_by('title')
     else:
         products = Product.objects.select_related('seller').filter(seller=request.user).order_by('title')
@@ -3832,7 +4111,7 @@ def product_image_get_ajax(request, image_id):
     ):
         return JsonResponse({'success': False, 'message': 'Permission denied.'}, status=403)
     
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='product_image_management', action='read')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -3865,7 +4144,7 @@ def product_image_create_ajax(request):
     ):
         return JsonResponse({'success': False, 'message': 'Permission denied.'}, status=403)
     
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='product_image_management', action='create')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -3873,8 +4152,12 @@ def product_image_create_ajax(request):
     if blocked:
         return blocked
 
-    if not (_is_admin_user(request.user) or _is_seller_user(request.user)):
-        return JsonResponse({'success': False, 'message': 'Only admin or seller can upload images.'}, status=403)
+    if not (
+        _is_admin_user(request.user)
+        or _is_seller_user(request.user)
+        or has_permission(request.user, 'product_image_management', 'create')
+    ):
+        return JsonResponse({'success': False, 'message': 'Permission denied.'}, status=403)
 
     product_id = request.POST.get('product_id')
     if not product_id:
@@ -3950,7 +4233,7 @@ def product_image_delete_ajax(request, image_id):
     ):
         return JsonResponse({'success': False, 'message': 'Permission denied.'}, status=403)
     
-    allowed, msg = _check_admin_seller(request.user)
+    allowed, msg = _check_admin_seller(request.user, module='product_image_management', action='delete')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -3958,8 +4241,12 @@ def product_image_delete_ajax(request, image_id):
     if blocked:
         return blocked
 
-    if not (_is_admin_user(request.user) or _is_seller_user(request.user)):
-        return JsonResponse({'success': False, 'message': 'Unauthorized user.'}, status=403)
+    if not (
+        _is_admin_user(request.user)
+        or _is_seller_user(request.user)
+        or has_permission(request.user, 'product_image_management', 'delete')
+    ):
+        return JsonResponse({'success': False, 'message': 'Permission denied.'}, status=403)
 
     image = _product_images_for_user(request.user).filter(id=image_id).first()
     if not image:
@@ -3983,7 +4270,7 @@ def product_image_delete_ajax(request, image_id):
 @user_passes_test(is_superuser)
 def get_user_data(request, user_id):
     """Return user data as JSON for modal forms"""
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='user_management', action='read')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -3992,6 +4279,7 @@ def get_user_data(request, user_id):
         return blocked
         
     user = get_object_or_404(DaalUser, id=user_id)
+    current_status = _effective_user_status(user)
     user_data = {
         'id': user.id,
         'username': user.username,
@@ -4004,7 +4292,8 @@ def get_user_data(request, user_id):
         'gst_number': user.gst_number,
         'char_password': user.char_password,
         'is_active': user.is_active,
-        'account_status': user.account_status,
+        'status': current_status,
+        'account_status': current_status,
         'deactivated_at': user.deactivated_at.strftime('%Y-%m-%d %H:%M:%S') if user.deactivated_at else '',
         'suspended_at': user.suspended_at.strftime('%Y-%m-%d %H:%M:%S') if user.suspended_at else '',
         'suspension_reason': user.suspension_reason or '',
@@ -4019,10 +4308,10 @@ def get_user_data(request, user_id):
         'is_transporter': user.is_transporter,
         'is_both_sellerandbuyer': user.is_both_sellerandbuyer,
         'date_joined': user.date_joined.strftime('%Y-%m-%d %H:%M:%S'),
-        'pan_image': user.pan_image.url if user.pan_image else '',
-        'gst_image': user.gst_image.url if user.gst_image else '',
-        'shopact_image': user.shopact_image.url if user.shopact_image else '',
-        'adharcard_image': user.adharcard_image.url if user.adharcard_image else '',
+        'pan_image': _safe_user_document_url(user.pan_image),
+        'gst_image': _safe_user_document_url(user.gst_image),
+        'shopact_image': _safe_user_document_url(user.shopact_image),
+        'adharcard_image': _safe_user_document_url(user.adharcard_image),
         'tags': [{'id': tag.id, 'tag_name': tag.tag_name} for tag in user.tags.all().order_by('tag_name')],
     }
     return JsonResponse(user_data)
@@ -4031,7 +4320,7 @@ def get_user_data(request, user_id):
 @user_passes_test(is_superuser)
 def user_create_ajax(request):
     """Handle user creation via AJAX"""
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='user_management', action='create')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -4062,8 +4351,6 @@ def user_create_ajax(request):
             tag_ids, tag_parse_error = _extract_tag_ids_from_payload(data)
             if tag_parse_error:
                 return JsonResponse({'success': False, 'message': tag_parse_error})
-            account_status = (data.get('account_status') or 'active').strip().lower()
-            suspension_reason = (data.get('suspension_reason') or '').strip()
             
             # Validate required fields
             if not email or not mobile or not password:
@@ -4082,12 +4369,6 @@ def user_create_ajax(request):
             pan_number, gst_number, pan_gst_error = _validate_pan_gst_values(pan_number, gst_number)
             if pan_gst_error:
                 return JsonResponse({'success': False, 'message': pan_gst_error})
-            
-            if account_status not in {'active', 'deactive', 'suspended'}:
-                return JsonResponse({'success': False, 'message': 'Invalid account status.'})
-            
-            if account_status == 'suspended' and not suspension_reason:
-                return JsonResponse({'success': False, 'message': 'Suspension reason is required for suspended users.'})
             
             if len(tag_ids) < 1 or len(tag_ids) > 15:
                 return JsonResponse({'success': False, 'message': 'Please select at least 1 and maximum 15 tags.'})
@@ -4115,10 +4396,7 @@ def user_create_ajax(request):
                 user.pan_number = pan_number
                 user.gst_number = gst_number
                 user.char_password = char_password
-                user.account_status = account_status
-                user.deactivated_at = timezone.now() if account_status == 'deactive' else None
-                user.suspended_at = timezone.now() if account_status == 'suspended' else None
-                user.suspension_reason = suspension_reason if account_status == 'suspended' else ''
+                _apply_user_status(user, USER_STATUS_ACTIVE)
                 
                 # Set role-based flags
                 if role == 'admin':
@@ -4148,8 +4426,6 @@ def user_create_ajax(request):
                 user.tags.set(selected_tags)
             
             send_welcome_credentials_email_async(user.email, user.username, user.char_password)
-            if account_status == 'suspended':
-                send_account_suspended_email_async(user.email, user.suspension_reason)
             
             return JsonResponse({
                 'success': True, 
@@ -4167,7 +4443,9 @@ def user_create_ajax(request):
                     'gst_number': user.gst_number,
                     'char_password': user.char_password,
                     'is_active': user.is_active,
-                    'account_status': user.account_status,
+                    'status': _effective_user_status(user),
+                    'account_status': _effective_user_status(user),
+                    'suspension_reason': user.suspension_reason or '',
                     'date_joined': user.date_joined.strftime('%b %d, %Y')
                 }
             })
@@ -4181,7 +4459,7 @@ def user_create_ajax(request):
 @user_passes_test(is_superuser)
 def user_update_ajax(request, user_id):
     """Handle user update via AJAX"""
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='user_management', action='update')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     
@@ -4205,10 +4483,6 @@ def user_update_ajax(request, user_id):
             tag_ids, tag_parse_error = _extract_tag_ids_from_payload(data)
             if tag_parse_error:
                 return JsonResponse({'success': False, 'message': tag_parse_error})
-            is_active = data.get('is_active', False)
-            account_status = (data.get('account_status') or user.account_status or 'active').strip().lower()
-            suspension_reason = (data.get('suspension_reason') or '').strip()
-            previous_account_status = user.account_status
 
             # Validate required fields
             if not email or not mobile:
@@ -4225,12 +4499,6 @@ def user_update_ajax(request, user_id):
             pan_number, gst_number, pan_gst_error = _validate_pan_gst_values(pan_number, gst_number)
             if pan_gst_error:
                 return JsonResponse({'success': False, 'message': pan_gst_error})
-            
-            if account_status not in {'active', 'deactive', 'suspended'}:
-                return JsonResponse({'success': False, 'message': 'Invalid account status.'})
-            
-            if account_status == 'suspended' and not suspension_reason:
-                return JsonResponse({'success': False, 'message': 'Suspension reason is required for suspended users.'})
             
             if tag_ids:
                 if len(tag_ids) > 15:
@@ -4252,11 +4520,6 @@ def user_update_ajax(request, user_id):
                 user.pan_number = pan_number
                 user.gst_number = gst_number
                 user.char_password = char_password
-                user.is_active = is_active
-                user.account_status = account_status
-                user.deactivated_at = timezone.now() if account_status == 'deactive' else None
-                user.suspended_at = timezone.now() if account_status == 'suspended' else None
-                user.suspension_reason = suspension_reason if account_status == 'suspended' else ''
                 
                 # Reset role-based flags
                 user.is_buyer = False
@@ -4286,11 +4549,6 @@ def user_update_ajax(request, user_id):
                 if selected_tags is not None:
                     user.tags.set(selected_tags)
             
-            if account_status == 'suspended' and previous_account_status != 'suspended':
-                send_account_suspended_email_async(user.email, user.suspension_reason)
-            if account_status == 'active' and previous_account_status in {'deactive', 'suspended'}:
-                send_account_activated_email_async(user.email)
-            
             return JsonResponse({
                 'success': True, 
                 'message': f'User {user.username} updated successfully.',
@@ -4307,7 +4565,9 @@ def user_update_ajax(request, user_id):
                     'gst_number': user.gst_number,
                     'char_password': user.char_password,
                     'is_active': user.is_active,
-                    'account_status': user.account_status,
+                    'status': _effective_user_status(user),
+                    'account_status': _effective_user_status(user),
+                    'suspension_reason': user.suspension_reason or '',
                     'date_joined': user.date_joined.strftime('%b %d, %Y')
                 }
             })
@@ -4319,9 +4579,79 @@ def user_update_ajax(request, user_id):
 
 
 @user_passes_test(is_superuser)
+def user_update_status_ajax(request, user_id):
+    """Update only user status from user management table."""
+    allowed, msg = _check_admin_only(request.user, module='user_management', action='update')
+    if not allowed:
+        return JsonResponse({'success': False, 'message': msg}, status=403)
+
+    blocked = action_allowed_or_json(request)
+    if blocked:
+        return blocked
+
+    user = get_object_or_404(DaalUser, id=user_id)
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid request method.'})
+
+    try:
+        request_content_type = str(request.content_type or '').lower()
+        if request_content_type.startswith('application/json'):
+            data = json.loads(request.body or '{}')
+        else:
+            data = request.POST
+
+        next_status = normalize_user_status(data.get('status'))
+        suspension_reason = (data.get('suspension_reason') or '').strip()
+        previous_status = _effective_user_status(user)
+
+        if next_status not in VALID_USER_STATUSES:
+            return JsonResponse({'success': False, 'message': 'Invalid status.'})
+
+        if request.user.id == user.id and next_status == USER_STATUS_DEACTIVATED:
+            return JsonResponse(
+                {'success': False, 'message': 'You cannot deactivate your own account.'},
+                status=400,
+            )
+
+        if next_status == USER_STATUS_SUSPENDED and not suspension_reason:
+            return JsonResponse(
+                {'success': False, 'message': 'Suspension reason is required for suspended users.'},
+                status=400,
+            )
+
+        with transaction.atomic():
+            _apply_user_status(user, next_status, suspension_reason)
+            user.save(update_fields=[
+                'status', 'account_status', 'is_active',
+                'deactivated_at', 'suspended_at', 'suspension_reason',
+            ])
+
+        if next_status == USER_STATUS_SUSPENDED and previous_status != USER_STATUS_SUSPENDED:
+            send_account_suspended_email_async(user.email, user.suspension_reason)
+        if next_status == USER_STATUS_ACTIVE and previous_status in {USER_STATUS_DEACTIVATED, USER_STATUS_SUSPENDED}:
+            send_account_activated_email_async(user.email)
+
+        effective_status = _effective_user_status(user)
+        return JsonResponse({
+            'success': True,
+            'message': 'User status updated successfully.',
+            'user': {
+                'id': user.id,
+                'status': effective_status,
+                'account_status': effective_status,
+                'suspension_reason': user.suspension_reason or '',
+                'is_active': user.is_active,
+            },
+        })
+    except Exception as exc:
+        return JsonResponse({'success': False, 'message': f'Error updating status: {str(exc)}'})
+
+
+@user_passes_test(is_superuser)
 def user_delete_ajax(request, user_id):
     """Handle user deletion via AJAX"""
-    allowed, msg = _check_admin_only(request.user)
+    allowed, msg = _check_admin_only(request.user, module='user_management', action='delete')
     if not allowed:
         return JsonResponse({'success': False, 'message': msg}, status=403)
     

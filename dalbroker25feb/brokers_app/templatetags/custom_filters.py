@@ -1,4 +1,5 @@
 from django import template
+from brokers_app.utils import has_permission as role_has_permission
 
 register = template.Library()
 
@@ -26,3 +27,19 @@ def replace(value, args):
     
     old, new = args.split(',', 1)
     return value.replace(old.strip(), new.strip())
+
+
+@register.filter
+def user_can(user, rule):
+    """
+    Check role permission from templates.
+    Usage: {{ user|user_can:"product_management:read" }}
+    """
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    parts = str(rule or '').split(':', 1)
+    module = (parts[0] or '').strip()
+    action = (parts[1] if len(parts) > 1 else 'read').strip()
+    if not module:
+        return False
+    return role_has_permission(user, module, action)

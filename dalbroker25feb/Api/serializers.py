@@ -2,6 +2,7 @@ from rest_framework import serializers
 import re
 from brokers_app.models import *
 from .utils import normalize_role, _is_admin_user
+from brokers_app.utils import get_contract_display_ids
 
 PAN_REGEX = re.compile(r'^[A-Z]{5}[0-9]{4}[A-Z]$')
 GST_REGEX = re.compile(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9]Z[0-9A-Z]$')
@@ -155,7 +156,13 @@ class ProductSerializer(serializers.ModelSerializer):
         return None
 
     def get_interest_count(self, obj):
-        return obj.interests.filter(is_active=True, status='interested').count()
+        return obj.interests.filter(
+            is_active=True,
+            status__in=[
+                ProductInterest.STATUS_INTERESTED,
+                ProductInterest.STATUS_SELLER_CONFIRMED,
+            ],
+        ).count()
     
     def get_available_quantity(self, obj):
         return str(obj.remaining_quantity or obj.original_quantity or '0')
@@ -597,15 +604,39 @@ class ContractSerializer(serializers.ModelSerializer):
     buyer_name = serializers.CharField(source='buyer.username', read_only=True)
     buyer_unique_id = serializers.CharField(source='buyer.buyer_unique_id', read_only=True)
     seller_name = serializers.CharField(source='seller.username', read_only=True)
+    display_seller_id = serializers.SerializerMethodField()
+    display_buyer_id = serializers.SerializerMethodField()
     
     class Meta:
         model = Contract
         fields = '__all__'
         read_only_fields = ['contract_id', 'confirmed_at', 'created_at']
-from rest_framework import serializers
-import re
-from brokers_app.models import *
-from .utils import normalize_role, _is_admin_user
+
+    def get_display_seller_id(self, obj):
+        request = self.context.get('request')
+        user = request.user if request else None
+        is_admin = bool(user and _is_admin_user(user))
+        return get_contract_display_ids(obj, user, is_admin=is_admin)['display_seller_id']
+
+    def get_display_buyer_id(self, obj):
+        request = self.context.get('request')
+        user = request.user if request else None
+        is_admin = bool(user and _is_admin_user(user))
+        return get_contract_display_ids(obj, user, is_admin=is_admin)['display_buyer_id']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        user = request.user if request else None
+        is_admin = bool(user and _is_admin_user(user))
+        party_ids = get_contract_display_ids(instance, user, is_admin=is_admin)
+        data['seller'] = party_ids['seller_id']
+        data['buyer'] = party_ids['buyer_id']
+        data['display_seller_id'] = party_ids['display_seller_id']
+        data['display_buyer_id'] = party_ids['display_buyer_id']
+        if not (is_admin or (user and user.id == instance.buyer_id)):
+            data['buyer_unique_id'] = None
+        return data
 
 PAN_REGEX = re.compile(r'^[A-Z]{5}[0-9]{4}[A-Z]$')
 GST_REGEX = re.compile(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9]Z[0-9A-Z]$')
@@ -759,7 +790,13 @@ class ProductSerializer(serializers.ModelSerializer):
         return None
 
     def get_interest_count(self, obj):
-        return obj.interests.filter(is_active=True, status='interested').count()
+        return obj.interests.filter(
+            is_active=True,
+            status__in=[
+                ProductInterest.STATUS_INTERESTED,
+                ProductInterest.STATUS_SELLER_CONFIRMED,
+            ],
+        ).count()
     
     def get_available_quantity(self, obj):
         return str(obj.remaining_quantity or obj.original_quantity or '0')
@@ -1201,8 +1238,36 @@ class ContractSerializer(serializers.ModelSerializer):
     buyer_name = serializers.CharField(source='buyer.username', read_only=True)
     buyer_unique_id = serializers.CharField(source='buyer.buyer_unique_id', read_only=True)
     seller_name = serializers.CharField(source='seller.username', read_only=True)
+    display_seller_id = serializers.SerializerMethodField()
+    display_buyer_id = serializers.SerializerMethodField()
     
     class Meta:
         model = Contract
         fields = '__all__'
         read_only_fields = ['contract_id', 'confirmed_at', 'created_at']
+
+    def get_display_seller_id(self, obj):
+        request = self.context.get('request')
+        user = request.user if request else None
+        is_admin = bool(user and _is_admin_user(user))
+        return get_contract_display_ids(obj, user, is_admin=is_admin)['display_seller_id']
+
+    def get_display_buyer_id(self, obj):
+        request = self.context.get('request')
+        user = request.user if request else None
+        is_admin = bool(user and _is_admin_user(user))
+        return get_contract_display_ids(obj, user, is_admin=is_admin)['display_buyer_id']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        user = request.user if request else None
+        is_admin = bool(user and _is_admin_user(user))
+        party_ids = get_contract_display_ids(instance, user, is_admin=is_admin)
+        data['seller'] = party_ids['seller_id']
+        data['buyer'] = party_ids['buyer_id']
+        data['display_seller_id'] = party_ids['display_seller_id']
+        data['display_buyer_id'] = party_ids['display_buyer_id']
+        if not (is_admin or (user and user.id == instance.buyer_id)):
+            data['buyer_unique_id'] = None
+        return data

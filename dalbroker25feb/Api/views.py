@@ -22,13 +22,29 @@ from .permission import *
 from .serializers import *
 from .utils import *
 from .utils import _is_admin_user, _is_seller_user, _is_buyer_user
-from brokers_app.utils import can_user_perform_action
+from brokers_app.utils import (
+    can_user_perform_action,
+    get_user_status,
+    normalize_user_status,
+    get_contract_display_ids,
+)
 from django.db.models import Q, Count, Sum, F, DecimalField, Avg
 from django.db.models.functions import Coalesce
 from decimal import Decimal
 
 DEFAULT_PAGE_SIZE = 10
 logger = logging.getLogger(__name__)
+USER_STATUS_ACTIVE = 'active'
+USER_STATUS_DEACTIVATED = 'deactivated'
+USER_STATUS_SUSPENDED = 'suspended'
+PENDING_INTEREST_STATUSES = (
+    ProductInterest.STATUS_INTERESTED,
+    ProductInterest.STATUS_SELLER_CONFIRMED,
+)
+
+
+def _effective_user_status(user):
+    return normalize_user_status(get_user_status(user))
 
 
 def _create_user_from_registration_data(validated_data):
@@ -49,6 +65,7 @@ def _create_user_from_registration_data(validated_data):
         kyc_status='pending',
         kyc_submitted_at=timezone.now(),
         kyc_rejection_reason='',
+        status='active',
         account_status='active',
         is_active=True,
         char_password=plain_password,
@@ -159,10 +176,13 @@ class TokenViewSet(viewsets.ViewSet):
         user = authenticate(request, mobile=mobile, password=password) or authenticate(request, username=mobile, password=password)
         if user is None:
             return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-        if getattr(user, 'account_status', 'active') == 'suspended':
+        current_status = _effective_user_status(user)
+        if current_status == USER_STATUS_SUSPENDED:
             if should_send_suspension_email(user.id):
                 send_account_suspended_email_async(user.email, getattr(user, 'suspension_reason', ''))
             return Response({'detail': 'Your account has been suspended. Check your email.'}, status=status.HTTP_403_FORBIDDEN)
+        if current_status == USER_STATUS_DEACTIVATED:
+            return Response({'detail': 'Your account has been deactivated. Please contact admin.'}, status=status.HTTP_403_FORBIDDEN)
 
         refresh = RefreshToken.for_user(user)
         return Response({
@@ -173,7 +193,8 @@ class TokenViewSet(viewsets.ViewSet):
                 'username': user.username,
                 'role': user.role,
                 'kyc_status': user.kyc_status,
-                'account_status': user.account_status,
+                'status': current_status,
+                'account_status': current_status,
             },
         })
 
@@ -237,10 +258,13 @@ def login_api(request):
     user = authenticate(request, mobile=mobile, password=password) or authenticate(request, username=mobile, password=password)
     if user is None:
         return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-    if getattr(user, 'account_status', 'active') == 'suspended':
+    current_status = _effective_user_status(user)
+    if current_status == USER_STATUS_SUSPENDED:
         if should_send_suspension_email(user.id):
             send_account_suspended_email_async(user.email, getattr(user, 'suspension_reason', ''))
         return Response({'detail': 'Your account has been suspended. Check your email.'}, status=status.HTTP_403_FORBIDDEN)
+    if current_status == USER_STATUS_DEACTIVATED:
+        return Response({'detail': 'Your account has been deactivated. Please contact admin.'}, status=status.HTTP_403_FORBIDDEN)
 
     refresh = RefreshToken.for_user(user)
     return Response({
@@ -251,7 +275,8 @@ def login_api(request):
             'username': user.username,
             'role': user.role,
             'kyc_status': user.kyc_status,
-            'account_status': user.account_status,
+            'status': current_status,
+            'account_status': current_status,
         },
     })
 
@@ -539,6 +564,7 @@ def session_token_api(request):
     Issue JWT tokens for authenticated session users.
     Used by template pages so frontend guards can bootstrap tokens safely.
     """
+    current_status = _effective_user_status(request.user)
     refresh = RefreshToken.for_user(request.user)
     return Response({
         'access': str(refresh.access_token),
@@ -548,7 +574,8 @@ def session_token_api(request):
             'username': request.user.username,
             'role': request.user.role,
             'kyc_status': request.user.kyc_status,
-            'account_status': request.user.account_status,
+            'status': current_status,
+            'account_status': current_status,
         },
     }, status=status.HTTP_200_OK)
 
@@ -626,7 +653,7 @@ def product_filter_api(request):
 
     if request.GET.get('interested', '').strip() != '':
         if _parse_bool(request.GET.get('interested')):
-            filters_q &= Q(interests__is_active=True)
+            filters_q &= Q(interests__is_active=True, interests__status__in=PENDING_INTEREST_STATUSES)
 
     if request.GET.get('approved', '').strip() != '':
         if _parse_bool(request.GET.get('approved')):
@@ -671,7 +698,10 @@ def product_filter_api(request):
                 'mobile': product.seller.mobile,
                 'email': product.seller.email,
             },
-            'interested_buyers_count': sum(1 for i in product.interests.all() if i.is_active),
+            'interested_buyers_count': sum(
+                1 for i in product.interests.all()
+                if i.is_active and i.status in PENDING_INTEREST_STATUSES
+            ),
             'approved_buyer_id': None,
         })
 
@@ -767,7 +797,7 @@ def universal_filter_api(request):
 
         interested_value = bool_param('interested')
         if interested_value:
-            q &= Q(interests__is_active=True)
+            q &= Q(interests__is_active=True, interests__status__in=PENDING_INTEREST_STATUSES)
 
         approved_value = bool_param('approved')
         if approved_value:
@@ -796,7 +826,10 @@ def universal_filter_api(request):
                 'mobile': p.seller.mobile,
                 'email': p.seller.email,
             },
-            'interested_buyers_count': sum(1 for i in p.interests.all() if i.is_active),
+            'interested_buyers_count': sum(
+                1 for i in p.interests.all()
+                if i.is_active and i.status in PENDING_INTEREST_STATUSES
+            ),
             'approved_buyer_id': None,
         } for p in page_obj.object_list]
 
@@ -1779,6 +1812,12 @@ def intrast_page(request):
             contracts_qs = contracts_qs.filter(buyer_id=int(buyer))
 
     page_obj, pagination = _paginate_queryset(request, contracts_qs, page_size=15)
+    is_admin_viewer = _is_admin_user(user)
+
+    for contract in page_obj.object_list:
+        party_ids = get_contract_display_ids(contract, user, is_admin=is_admin_viewer)
+        contract.display_seller_id = party_ids['display_seller_id']
+        contract.display_buyer_id = party_ids['display_buyer_id']
 
     total_contracts = contracts_qs.count()
     active_contracts = contracts_qs.filter(status=Contract.STATUS_ACTIVE).count()
@@ -1799,6 +1838,10 @@ def intrast_page(request):
     highlighted_contract_id = (request.GET.get('contract_id') or '').strip()
     if highlighted_contract_id.isdigit():
         highlighted_contract = contracts_qs.filter(id=int(highlighted_contract_id)).first()
+        if highlighted_contract:
+            party_ids = get_contract_display_ids(highlighted_contract, user, is_admin=is_admin_viewer)
+            highlighted_contract.display_seller_id = party_ids['display_seller_id']
+            highlighted_contract.display_buyer_id = party_ids['display_buyer_id']
 
     context = {
         'contracts': page_obj.object_list,

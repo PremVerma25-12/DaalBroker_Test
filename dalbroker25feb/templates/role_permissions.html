@@ -514,7 +514,7 @@
         try {
             const response = await fetch('{% url "update_permission" %}', {
                 method: "POST",
-                credentials: "same-origin"
+                credentials: "same-origin",
                 headers: {
                     "Content-Type": "application/json",
                     "X-CSRFToken": csrftoken
@@ -547,7 +547,7 @@
     async function updateSinglePermission(role, module, action, isAllowed) {
         const response = await fetch('{% url "update_permission" %}', {
             method: "POST",
-            credentials: "same-origin"
+            credentials: "same-origin",
             headers: {
                 "Content-Type": "application/json",
                 "X-CSRFToken": csrftoken
@@ -560,8 +560,7 @@
             })
         });
 
-        await parseApiResponse(response);
-        return data;
+        return parseApiResponse(response);
     }
 
     async function applyBulkPermission(isAllowed) {

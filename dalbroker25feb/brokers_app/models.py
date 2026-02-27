@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, IntegrityError
 
 # Create your models here.
 from django.db import models
@@ -18,8 +18,10 @@ from django.core import validators
 import os
 import random
 import string
+import re
 from datetime import datetime
 from decimal import Decimal
+from django.apps import apps
 
 def validate_file_size(value):
     max_size = 10 * 1024 * 1024  # 10MB in bytes
@@ -49,10 +51,26 @@ def generate_transaction_id():
 
 
 def generate_contract_id():
-    """Generate unique contract ID in format: CNT-YYYYMMDD-XXXX"""
-    today = datetime.now().strftime('%Y%m%d')
-    random_part = f"{random.randint(1000, 9999)}"
-    return f"CNT-{today}-{random_part}"
+    now = timezone.localtime()
+    prefix = f"JBC{now.strftime('%y%d%m')}"
+
+    ContractModel = apps.get_model('brokers_app', 'Contract')
+    pattern = re.compile(rf"^{re.escape(prefix)}(\d{{4}})$")
+
+    max_seq = 0
+    for existing_id in ContractModel.objects.filter(contract_id__startswith=prefix).values_list('contract_id', flat=True):
+        match = pattern.match(str(existing_id or ''))
+        if not match:
+            continue
+        seq = int(match.group(1))
+        if seq > max_seq:
+            max_seq = seq
+
+    next_seq = max_seq + 1
+    if next_seq > 9999:
+        raise ValidationError('Daily contract sequence limit exceeded for this prefix.')
+
+    return f"{prefix}{next_seq:04d}"
 
 
 def user_document_upload_to(instance, filename):
@@ -150,7 +168,7 @@ class DaalUser(AbstractBaseUser, PermissionsMixin):
     # User Status choices
     STATUS_CHOICES = [
         ('active', 'Active'),
-        ('deactive', 'Deactive'),
+        ('deactivated', 'Deactivated'),
         ('suspended', 'Suspended'),
     ]
     GENDER_CHOICES = [
@@ -470,8 +488,8 @@ class Product(models.Model):
                                     default='kg', null=True, blank=True)
     
     # ✅ Loading from-to fields
-    loading_from = models.CharField(max_length=200, blank=True, null=True, help_text="Loading from location")
-    loading_to = models.CharField(max_length=200, blank=True, null=True, help_text="Loading to location")
+    loading_from = models.DateField(null=True, blank=True, help_text="Loading start date")
+    loading_to = models.DateField(null=True, blank=True, help_text="Loading end date")
     remark = models.TextField(blank=True, null=True)
     loading_location = models.CharField(max_length=200)
     is_active = models.BooleanField(default=True)
@@ -765,9 +783,24 @@ class Contract(models.Model):
         return f"Contract: {self.contract_id} - {self.product.title}"
     
     def save(self, *args, **kwargs):
-        if not self.contract_id:
+        if self.contract_id:
+            super().save(*args, **kwargs)
+            return
+
+        last_error = None
+        for _ in range(5):
             self.contract_id = generate_contract_id()
-        super().save(*args, **kwargs)
+            try:
+                super().save(*args, **kwargs)
+                return
+            except IntegrityError as exc:
+                # Retry only if contract_id collided due to concurrent insert.
+                if 'contract_id' not in str(exc).lower():
+                    raise
+                last_error = exc
+
+        if last_error:
+            raise last_error
         
 
 #16 feb

@@ -581,6 +581,77 @@
         transform: translateY(-2px);
       }
 
+      .action-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .action-group form {
+        margin: 0;
+        display: inline-flex;
+      }
+
+      .action-btn {
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid transparent;
+        padding: 0 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: all 0.2s ease;
+      }
+
+      .action-btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .action-btn-primary {
+        background-color: var(--btn-color);
+        border-color: var(--btn-color);
+        color: #ffffff;
+      }
+
+      .action-btn-secondary {
+        background-color: var(--evt-blue);
+        color: var(--evt-blue-text);
+      }
+
+      .action-btn-warning {
+        background-color: var(--evt-orange);
+        color: var(--evt-orange-text);
+      }
+
+      .action-btn-success {
+        background-color: var(--evt-green);
+        color: var(--evt-green-text);
+      }
+
+      .action-btn-danger {
+        background-color: #ffebee;
+        color: #ef5350;
+      }
+
+      .action-btn-neutral {
+        background-color: #f1f5f9;
+        color: #475569;
+      }
+
+      .action-input {
+        height: 34px;
+        min-width: 96px;
+        border-radius: 10px;
+        padding: 4px 10px;
+      }
+
       
     </style>
   </head>
@@ -605,6 +676,82 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      (function () {
+        function getCsrfToken() {
+          const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+          return match ? decodeURIComponent(match[1]) : "";
+        }
+
+        function getStoredToken() {
+          return (
+            localStorage.getItem("db_access_token") ||
+            localStorage.getItem("access") ||
+            ""
+          );
+        }
+
+        function setStoredTokens(data) {
+          if (!data || typeof data !== "object") return;
+          if (data.access) localStorage.setItem("db_access_token", data.access);
+          if (data.refresh) localStorage.setItem("db_refresh_token", data.refresh);
+          if (data.user) {
+            localStorage.setItem("db_auth_user", JSON.stringify(data.user));
+          }
+        }
+
+        async function bootstrapSessionTokenIfNeeded(url, method, currentToken) {
+          const isSafeMethod = ["GET", "HEAD", "OPTIONS"].includes(method);
+          const isSessionTokenUrl = String(url || "").includes("/api/auth/session-token/");
+          if (currentToken || !isSafeMethod || isSessionTokenUrl) return currentToken;
+          try {
+            const res = await fetch("/api/auth/session-token/", {
+              method: "GET",
+              credentials: "same-origin",
+              headers: {
+                "X-Requested-With": "XMLHttpRequest",
+              },
+            });
+            if (!res.ok) return currentToken;
+            const data = await res.json();
+            setStoredTokens(data);
+            return getStoredToken();
+          } catch (err) {
+            return currentToken;
+          }
+        }
+
+        window.dbGetCsrfToken = getCsrfToken;
+
+        window.authFetch = async function (url, options) {
+          const init = options ? { ...options } : {};
+          const headers = new Headers(init.headers || {});
+          const method = String(init.method || "GET").toUpperCase();
+          const isSafeMethod = ["GET", "HEAD", "OPTIONS"].includes(method);
+
+          let token = getStoredToken();
+          token = await bootstrapSessionTokenIfNeeded(url, method, token);
+
+          if (token && !headers.has("Authorization")) {
+            headers.set("Authorization", "Bearer " + token);
+          }
+          if (!headers.has("X-Requested-With")) {
+            headers.set("X-Requested-With", "XMLHttpRequest");
+          }
+          if (!isSafeMethod && !headers.has("X-CSRFToken")) {
+            const csrf = getCsrfToken();
+            if (csrf) headers.set("X-CSRFToken", csrf);
+          }
+
+          init.headers = headers;
+          if (!init.credentials) {
+            init.credentials = "same-origin";
+          }
+
+          return fetch(url, init);
+        };
+      })();
+    </script>
     {% block extra_js %}{% endblock %}
     <script type="text/javascript">
       document.querySelectorAll(".btn-action").forEach((btn) => {

@@ -50,10 +50,18 @@
       background: #ffffff;
       margin-bottom: 12px;
     }
+    .btn-approve {
+      background-color: var(--evt-green);
+      color: var(--evt-green-text);
+    }
+    .btn-reject {
+      background-color: #ffebee;
+      color: #ef5350;
+    }
   </style>
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">Admin KYC Dashboard</h3>
-    <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#changePasswordModal">Change Password</button>
+    <!-- <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#changePasswordModal">Change Password</button> -->
   </div>
 
   <div id="kycAlert"></div>
@@ -136,12 +144,14 @@
                 <button class="btn-action btn-view" title="View" onclick="openViewModal({{ item.id }})">
                   <i class="fa-regular fa-eye"></i>
                 </button>
+                {% if item.kyc_status != 'approved' and item.kyc_status != 'rejected' %}
                 <button class="btn-action btn-approve" title="Approve" onclick="approveKyc({{ item.id }})">
                   <i class="fa-solid fa-check"></i>
                 </button>
                 <button class="btn-action btn-reject" title="Reject" onclick="openRejectModal({{ item.id }})">
                   <i class="fa-solid fa-xmark"></i>
                 </button>
+                {% endif %}
               </div>
             </td>
           </tr>
@@ -304,12 +314,14 @@ function refreshKycRow(userId) {
             <button class="btn-action btn-view" title="View" onclick="openViewModal(${u.id})">
               <i class="fa-regular fa-eye"></i>
             </button>
+            ${u.kyc_status !== 'approved' && u.kyc_status !== 'rejected' ? `
             <button class="btn-action btn-approve" title="Approve" onclick="approveKyc(${u.id})">
               <i class="fa-solid fa-check"></i>
             </button>
             <button class="btn-action btn-reject" title="Reject" onclick="openRejectModal(${u.id})">
               <i class="fa-solid fa-xmark"></i>
             </button>
+            ` : ''}
           </div>
         </td>
       `;

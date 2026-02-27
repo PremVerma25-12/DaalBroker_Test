@@ -3,288 +3,140 @@
 {% block title %}Create Product Offer{% endblock %}
 
 {% block content %}
-<style>
-.offer-page-wrap {
-    background:
-        radial-gradient(circle at 8% 8%, rgba(66, 133, 244, 0.10), transparent 45%),
-        radial-gradient(circle at 92% 92%, rgba(22, 163, 74, 0.08), transparent 38%),
-        linear-gradient(180deg, #f7f9fd 0%, #f2f5fb 100%);
-    border: 1px solid #e4eaf5;
-    border-radius: 25px;
-    padding: 20px;
-    /* max-width: 1240px; */
-    margin: 0 auto;
-}
-.offer-topbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-}
-.offer-title {
-    margin: 0;
-    font-size: 32px;
-    font-weight: 700;
-    line-height: 1.1;
-    color: #1f2a44;
-}
-.offer-view-link {
-    color: #3a6ecb;
-    font-size: 21px;
-    text-decoration: none;
-    font-weight: 500;
-    white-space: nowrap;
-}
-.offer-view-link:hover {
-    text-decoration: underline;
-}
-.offer-form-shell {
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid #dce6f5;
-    border-radius: 16px;
-    padding: 16px;
-}
-.offer-section {
-    margin-bottom: 16px;
-}
-.offer-section:last-child {
-    margin-bottom: 4px;
-}
-.offer-section-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-}
-.offer-section-title h5 {
-    margin: 0;
-    font-size: 22px;
-    color: #4a5a7d;
-    white-space: nowrap;
-}
-.offer-section-title::after {
-    content: "";
-    height: 1px;
-    width: 100%;
-    background: linear-gradient(90deg, #d8e1f0 0%, #edf2fa 100%);
-}
-.offer-input-icon {
-    position: relative;
-}
-.offer-input-icon i,
-.offer-input-icon .inr-sign {
-    position: absolute;
-    left: 11px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #7f91b1;
-    font-size: 13px;
-    z-index: 2;
-}
-.offer-input-icon .form-control {
-    padding-left: 34px;
-}
-.offer-form-shell .form-control,
-.offer-form-shell .form-select {
-    height: 44px;
-    border-radius: 14px;
-    border-color: #d5dfef;
-    background: #f9fbff;
-    font-size: 14px;
-}
-.offer-form-shell textarea.form-control {
-    height: auto;
-    min-height: 74px;
-    padding-top: 10px;
-}
-.offer-submit-row {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 4px;
-}
-.offer-submit-btn {
-    min-width: 170px;
-    justify-content: center;
-    border-radius: 14px;
-    padding: 9px 16px;
-    font-size: 15px;
-}
-@media (max-width: 991.98px) {
-    .offer-page-wrap {
-        padding: 14px;
-        border-radius: 14px;
-    }
-    .offer-topbar {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    .offer-title {
-        font-size: 26px;
-    }
-    .offer-view-link {
-        font-size: 18px;
-    }
-    .offer-form-shell {
-        padding: 12px;
-    }
-    .offer-section-title h5 {
-        font-size: 19px;
-    }
-}
-</style>
+<div class="page-header">
+    <nav class="breadcrumb-custom" aria-label="breadcrumb">
+        <a href="/dashboard/">Dashboard</a>
+        <i class="separator fa fa-chevron-right"></i>
+        <a href="#">Product</a>
+        <i class="separator fa fa-chevron-right"></i>
+        <span class="active">Create Offer</span>
+    </nav>
 
-<div class="offer-page-wrap">
-    <div class="page-header">
-        <nav class="breadcrumb-custom" aria-label="breadcrumb">
-            <a href="/dashboard/">Dashboard</a>
-            <i class="separator fa fa-chevron-right"></i>
-            <a href="#">Product</a>
-            <i class="separator fa fa-chevron-right"></i>
-            <span class="active">Create Offer</span>
-        </nav>
+    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+        <h1 class="page-title mb-0">Create Offer For Product</h1>
+        <a href="{% url 'product_list' %}" class="btn btn-outline-dal">
+            <i class="fa-solid fa-list"></i> View Product List
+        </a>
     </div>
+</div>
 
-    <div class="offer-topbar">
-        <h1 class="offer-title">Create Offer For Product</h1>
-        <a href="{% url 'product_list' %}" class="offer-view-link">View Product List</a>
+{% if messages %}
+<div class="mb-3">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
+    {% endfor %}
+</div>
+{% endif %}
 
-    {% if messages %}
-    <div class="mb-3">
-        {% for message in messages %}
-        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
+<div class="card p-4 mb-3">
+    <form method="post" action="{% url 'product_create_ajax' %}">
+        {% csrf_token %}
 
-    <div class="offer-form-shell">
-        <form method="post" action="{% url 'product_create_ajax' %}">
-            {% csrf_token %}
-
-            <section class="offer-section">
-                <div class="offer-section-title">
-                    <h5>Product Information</h5>
+        <div class="form-section">
+            <div class="form-section-title">Product Information</div>
+            <div class="row g-3">
+                <div class="col-lg-4">
+                    <label class="form-label">Product Item *</label>
+                    <input type="text" name="title" class="form-control" placeholder="Product Item" required>
                 </div>
-                <div class="row g-3">
-                    <div class="col-lg-4">
-                        <label class="form-label">Product Item *</label>
-                        <input type="text" name="title" class="form-control" placeholder="Product Item" required>
-                    </div>
-                    <div class="col-lg-4">
-                        <label class="form-label">Category / Subcategory / Sub-subcategory *</label>
-                        <select name="category_id" class="form-select" required>
-                            <option value="">Select Category</option>
-                            {% for category in all_categories %}
-                            <option value="{{ category.id }}">{{ category.get_full_path }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-lg-4">
-                        <label class="form-label">Seller {% if is_admin_user %}*{% endif %}</label>
-                        <select name="seller_id" class="form-select" {% if is_admin_user %}required{% else %}disabled{% endif %}>
-                            {% if is_admin_user %}
-                            <option value="">Select Seller</option>
-                            {% endif %}
-                            {% for seller in sellers %}
-                            <option value="{{ seller.id }}" {% if not is_admin_user and forloop.first %}selected{% endif %}>{{ seller.username }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="col-lg-3">
-                        <label class="form-label">Rate *</label>
-                        <div class="offer-input-icon">
-                            <span class="inr-sign">&#8377;</span>
-                            <input type="number" name="amount" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
-                        </div>
-                    </div>
-                    <div class="col-lg-3">
-                        <label class="form-label">Rate Unit *</label>
-                        <select name="amount_unit" class="form-select" required>
-                            <option value="kg">KG</option>
-                            <option value="ton">TON</option>
-                            <option value="qtl">QTL</option>
-                        </select>
-                    </div>
-                    <div class="col-lg-3">
-                        <label class="form-label">Offer Quantity *</label>
-                        <input type="number" name="quantity" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
-                    </div>
-                    <div class="col-lg-3">
-                        <label class="form-label">Brand</label>
-                        <select name="brand_id" class="form-select">
-                            <option value="">Select Brand</option>
-                            {% for brand in brands %}
-                            <option value="{{ brand.id }}">{{ brand.brand_name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+                <div class="col-lg-4">
+                    <label class="form-label">Category / Subcategory / Sub-subcategory *</label>
+                    <select name="category_id" class="form-select" required>
+                        <option value="">Select Category</option>
+                        {% for category in all_categories %}
+                        <option value="{{ category.id }}">{{ category.get_full_path }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-            </section>
-
-            <section class="offer-section">
-                <div class="offer-section-title">
-                    <h5>Pricing & Quantity</h5>
+                <div class="col-lg-4">
+                    <label class="form-label">Seller {% if is_admin_user %}*{% endif %}</label>
+                    <select name="seller_id" class="form-select" {% if is_admin_user %}required{% else %}disabled{% endif %}>
+                        {% if is_admin_user %}
+                        <option value="">Select Seller</option>
+                        {% endif %}
+                        {% for seller in sellers %}
+                        <option value="{{ seller.id }}" {% if not is_admin_user and forloop.first %}selected{% endif %}>{{ seller.username }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <div class="row g-3">
-                    <div class="col-lg-4">
-                        <label class="form-label">Loading From *</label>
-                        <div class="offer-input-icon">
-                            <i class="fas fa-location-dot"></i>
-                            <input type="text" name="loading_from" class="form-control" placeholder="Loading From" required>
-                        </div>
-                    </div>
-                    <div class="col-lg-4">
-                        <label class="form-label">Loading To *</label>
-                        <div class="offer-input-icon">
-                            <i class="fas fa-location-dot"></i>
-                            <input type="text" name="loading_to" class="form-control" placeholder="Loading To" required>
-                        </div>
-                    </div>
-                    <div class="col-lg-4">
-                        <label class="form-label">Quantity Unit *</label>
-                        <select name="quantity_unit" class="form-select" required>
-                            <option value="kg">KG</option>
-                            <option value="ton">TON</option>
-                            <option value="qtl">QTL</option>
-                        </select>
-                    </div>
-                </div>
-            </section>
-
-            <section class="offer-section">
-                <div class="row g-3">
-                    <div class="col-lg-6">
-                        <div class="offer-section-title">
-                            <h5>Logistics & Notes</h5>
-                        </div>
-                        <label class="form-label">Description</label>
-                        <div class="offer-input-icon">
-                            <i class="fas fa-note-sticky"></i>
-                            <textarea name="description" class="form-control" rows="4" placeholder="Description"></textarea>
-                        </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="offer-section-title">
-                            <h5>Remark</h5>
-                        </div>
-                        <label class="form-label">Remark</label>
-                        <div class="offer-input-icon">
-                            <i class="fas fa-message"></i>
-                            <textarea name="remark" class="form-control" rows="4" placeholder="Remark"></textarea>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <div class="offer-submit-row">
-                <button type="submit" class="btn btn-primary offer-submit-btn">Create Offer <i class="fas fa-arrow-right"></i></button>
             </div>
-        </form>
-    </div>
+        </div>
+
+        <div class="form-section">
+            <div class="form-section-title">Pricing & Quantity</div>
+            <div class="row g-3">
+                <div class="col-lg-3">
+                    <label class="form-label">Rate *</label>
+                    <input type="number" name="amount" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label">Rate Unit *</label>
+                    <select name="amount_unit" class="form-select" required>
+                        <option value="kg">KG</option>
+                        <option value="ton">TON</option>
+                        <option value="qtl">QTL</option>
+                    </select>
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label">Offer Quantity *</label>
+                    <input type="number" name="quantity" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label">Brand</label>
+                    <select name="brand_id" class="form-select">
+                        <option value="">Select Brand</option>
+                        {% for brand in brands %}
+                        <option value="{{ brand.id }}">{{ brand.brand_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <div class="form-section-title">Loading & Delivery</div>
+            <div class="row g-3">
+                <div class="col-lg-4">
+                    <label class="form-label">Loading Date From *</label>
+                    <input type="date" name="loading_from" class="form-control" required>
+                </div>
+                <div class="col-lg-4">
+                    <label class="form-label">Loading Date To *</label>
+                    <input type="date" name="loading_to" class="form-control" required>
+                </div>
+                <div class="col-lg-4">
+                    <label class="form-label">Quantity Unit *</label>
+                    <select name="quantity_unit" class="form-select" required>
+                        <option value="kg">KG</option>
+                        <option value="ton">TON</option>
+                        <option value="qtl">QTL</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section mb-0">
+            <div class="form-section-title">Notes</div>
+            <div class="row g-3">
+                <div class="col-lg-6">
+                    <label class="form-label">Description</label>
+                    <textarea name="description" class="form-control" rows="4" placeholder="Description"></textarea>
+                </div>
+                <div class="col-lg-6">
+                    <label class="form-label">Remark</label>
+                    <textarea name="remark" class="form-control" rows="4" placeholder="Remark"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end mt-3">
+            <button type="submit" class="btn btn-dal">
+                <i class="fa-solid fa-plus"></i> Create Offer
+            </button>
+        </div>
+    </form>
 </div>
 {% endblock %}

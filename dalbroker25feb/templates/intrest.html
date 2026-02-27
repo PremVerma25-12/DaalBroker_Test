@@ -16,7 +16,7 @@
         <h1 class="page-title">Contracts / Deals Management</h1>
         {% if is_admin_or_super_admin %}
         <div class="d-flex gap-2">
-            <button type="button" class="btn btn-outline-primary" id="exportExcelBtn">
+            <button type="button" class="btn btn-outline-dal" id="exportExcelBtn">
                 <i class="fas fa-file-excel"></i> Export
             </button>
         </div>
@@ -27,6 +27,121 @@
 <div id="contractAlertBox"></div>
 <form id="csrfTokenForm" class="d-none">{% csrf_token %}</form>
 
+<style>
+.deal-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.4rem;
+    margin-bottom: 1.5rem;
+}
+
+.deal-stat-card {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 18px;
+    padding: 1.6rem 1.6rem 1.4rem;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: all 0.25s ease;
+}
+
+.deal-stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+}
+
+/* Top Accent Line */
+.deal-stat-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    border-top-left-radius: 18px;
+    border-top-right-radius: 18px;
+}
+
+.deal-stat-card.blue::before { background: #3b82f6; }
+.deal-stat-card.green::before { background: #22c55e; }
+.deal-stat-card.cyan::before { background: #06b6d4; }
+.deal-stat-card.orange::before { background: #f59e0b; }
+
+/* Icon */
+.deal-stat-icon {
+    width: 45px;
+    height: 45px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    font-weight: 600;
+}
+
+.deal-stat-card.blue .deal-stat-icon {
+    background: rgba(59,130,246,0.12);
+    color: #3b82f6;
+}
+.deal-stat-card.green .deal-stat-icon {
+    background: rgba(34,197,94,0.12);
+    color: #22c55e;
+}
+.deal-stat-card.cyan .deal-stat-icon {
+    background: rgba(6,182,212,0.12);
+    color: #06b6d4;
+}
+.deal-stat-card.orange .deal-stat-icon {
+    background: rgba(245,158,11,0.12);
+    color: #f59e0b;
+}
+
+/* Title */
+.deal-stat-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #64748b;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin: 0;
+}
+
+/* Value */
+.deal-stat-value {
+    font-size: 2.2rem;
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0;
+    font-family: "Inter", sans-serif;
+}
+
+/* Trend */
+.deal-stat-trend {
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.deal-stat-trend.positive { color: #16a34a; }
+.deal-stat-trend.negative { color: #dc2626; }
+
+/* Extra small text */
+.deal-stat-subtext {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .deal-stat-value { font-size: 1.8rem; }
+    .deal-stat-card { padding: 1.2rem; }
+}
+</style>
+
 {% if highlighted_contract %}
 <div class="card border-success mb-3">
     <div class="card-header bg-success text-white">
@@ -36,8 +151,8 @@
         <div class="row g-2">
             <div class="col-md-3"><strong>Contract ID:</strong> {{ highlighted_contract.contract_id }}</div>
             <div class="col-md-3"><strong>Product:</strong> {{ highlighted_contract.product.title }}</div>
-            <div class="col-md-3"><strong>Buyer:</strong> {{ highlighted_contract.buyer.buyer_unique_id|default:"BUY-" }}{% if not highlighted_contract.buyer.buyer_unique_id %}{{ highlighted_contract.buyer.id|stringformat:"06d" }}{% endif %}</div>
-            <div class="col-md-3"><strong>Seller:</strong> SEL-{{ highlighted_contract.seller.id|stringformat:"06d" }}</div>
+            <div class="col-md-3"><strong>Buyer:</strong> {{ highlighted_contract.display_buyer_id }}</div>
+            <div class="col-md-3"><strong>Seller:</strong> {{ highlighted_contract.display_seller_id }}</div>
             <div class="col-md-3"><strong>Deal Amount:</strong> ₹{{ highlighted_contract.deal_amount }}/{{ highlighted_contract.amount_unit }}</div>
             <div class="col-md-3"><strong>Quantity:</strong> {{ highlighted_contract.deal_quantity }} {{ highlighted_contract.quantity_unit }}</div>
             <div class="col-md-3"><strong>Loading:</strong> {{ highlighted_contract.loading_from }} -> {{ highlighted_contract.loading_to }}</div>
@@ -83,72 +198,55 @@
         </div>
         {% endif %}
         <div class="col-md-3">
-            <button type="submit" class="btn btn-primary">Apply Filters</button>
-            <a href="{% url 'intrast_page' %}" class="btn btn-outline-secondary">Reset</a>
+            <button type="submit" class="btn btn-dal">Apply Filters</button>
+            <a href="{% url 'intrast_page' %}" class="btn btn-outline-dal">Reset</a>
         </div>
     </form>
 </div>
 
 <!-- Summary Cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title">Total Contracts</h6>
-                        <h2 class="mb-0">{{ total_contracts }}</h2>
-                    </div>
-                    <i class="fas fa-file-contract fa-2x opacity-50"></i>
-                </div>
-            </div>
+<div class="deal-stats-grid">
+    <article class="deal-stat-card blue">
+        <div class="deal-stat-icon">
+            <i class="fas fa-handshake"></i>
         </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title">Active Deals</h6>
-                        <h2 class="mb-0">{{ active_contracts }}</h2>
-                    </div>
-                    <i class="fas fa-handshake fa-2x opacity-50"></i>
-                </div>
-            </div>
+        <p class="deal-stat-title">Active Contracts</p>
+        <h3 class="deal-stat-value">{{ total_contracts }}</h3>
+        <p class="deal-stat-trend positive"><i class="fa-solid fa-arrow-up"></i><span>---</span></p>
+    </article>
+
+    <article class="deal-stat-card green">
+        <div class="deal-stat-icon">
+            <i class="fa-solid fa-indian-rupee-sign"></i>
         </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title">Completed</h6>
-                        <h2 class="mb-0">{{ completed_contracts }}</h2>
-                    </div>
-                    <i class="fas fa-check-circle fa-2x opacity-50"></i>
-                </div>
-            </div>
+        <p class="deal-stat-title">Gross Trade Value</p>
+        <h3 class="deal-stat-value">&#8377;{{ total_value|floatformat:2 }}</h3>
+        <p class="deal-stat-trend positive"><i class="fa-solid fa-arrow-up"></i><span>---</span></p>
+    </article>
+
+    <article class="deal-stat-card cyan">
+        <div class="deal-stat-icon">
+            <i class="fas fa-percent"></i>
         </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-warning text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title">Total Value</h6>
-                        <h2 class="mb-0">₹{{ total_value|floatformat:2 }}</h2>
-                    </div>
-                    <i class="fas fa-rupee-sign fa-2x opacity-50"></i>
-                </div>
-            </div>
+        <p class="deal-stat-title">Completed Deals</p>
+        <h3 class="deal-stat-value">{{ completed_contracts }}</h3>
+        <p class="deal-stat-trend positive"><i class="fa-solid fa-arrow-up"></i><span>---</span></p>
+    </article>
+
+    <article class="deal-stat-card orange">
+        <div class="deal-stat-icon">
+            <i class="fas fa-truck"></i>
         </div>
-    </div>
+        <p class="deal-stat-title">Pending Dispatches</p>
+        <h3 class="deal-stat-value">{{ active_contracts }}</h3>
+        <p class="deal-stat-trend negative"><i class="fa-solid fa-arrow-down"></i><span>---</span></p>
+    </article>
 </div>
 
 <!-- Contracts Table -->
 <div class="table-responsive card">
-    <table class="table table-hover" id="contractsTable">
-        <thead class="table-light">
+    <table class="table table-custom align-middle mb-0" id="contractsTable">
+        <thead>
             <tr>
                 <th>Contract ID</th>
                 <th>Product</th>
@@ -175,8 +273,8 @@
                         {{ contract.product.title }}
                     </a>
                 </td>
-                <td>{{ contract.buyer.buyer_unique_id|default:"BUY-" }}{% if not contract.buyer.buyer_unique_id %}{{ contract.buyer.id|stringformat:"06d" }}{% endif %}</td>
-                <td>SEL-{{ contract.seller.id|stringformat:"06d" }}</td>
+                <td>{{ contract.display_buyer_id }}</td>
+                <td>{{ contract.display_seller_id }}</td>
                 <td>
                     <span class="fw-bold text-primary">&#8377;{{ contract.deal_amount }}/{{ contract.amount_unit }}</span>
                 </td>
@@ -198,14 +296,14 @@
                 </td>
                 {% if is_admin_or_super_admin %}
                 <td>
-                    <div class="contract-actions" role="group" aria-label="Contract actions">
-                        <button type="button" class="btn btn-sm btn-primary view-contract"
+                    <div class="action-group" role="group" aria-label="Contract actions">
+                        <button type="button" class="action-btn action-btn-secondary view-contract"
                                 data-contract-id="{{ contract.id }}">
-                            <i class="fas fa-eye me-1"></i> Show
+                            <i class="fas fa-eye"></i> Show
                         </button>
-                        <button type="button" class="btn btn-sm btn-warning edit-contract"
+                        <button type="button" class="action-btn action-btn-warning edit-contract"
                                 data-contract-id="{{ contract.id }}">
-                            <i class="fas fa-edit me-1"></i> Edit
+                            <i class="fas fa-edit"></i> Edit
                         </button>
                     </div>
                 </td>
@@ -344,7 +442,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-outline-dal" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -376,39 +474,16 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="updateContractBtn">Update Contract</button>
+                <button type="button" class="btn btn-outline-dal" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-dal" id="updateContractBtn">Update Contract</button>
             </div>
         </div>
     </div>
 </div>
 
-<style>
-    .table-hover tbody tr:hover {
-        background-color: #f8f9fa;
-    }
-    .badge {
-        padding: 6px 12px;
-        font-weight: 500;
-    }
-    .contract-actions {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: nowrap;
-        min-width: 170px;
-    }
-    .contract-actions .btn {
-        height: 34px;
-        border-radius: 8px;
-        white-space: nowrap;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 78px;
-    }
-</style>
+{% endblock %}
 
+{% block extra_js %}
 <script>
 const viewContractModal = new bootstrap.Modal(document.getElementById('viewContractModal'));
 const editContractModal = new bootstrap.Modal(document.getElementById('editContractModal'));
@@ -460,8 +535,8 @@ document.querySelectorAll('.view-contract').forEach(btn => {
                 document.getElementById('view_product').textContent = data.product_title;
                 document.getElementById('view_product_id').textContent = data.product_id || '-';
 
-                const buyerCode = data.buyer_unique_id || `BUY-${String(data.buyer_id || '').padStart(6, '0')}`;
-                const sellerCode = `SEL-${String(data.seller_id || '').padStart(6, '0')}`;
+                const buyerCode = data.display_buyer_id || data.buyer_unique_id || `BUY-${String(data.buyer_id || '').padStart(6, '0')}`;
+                const sellerCode = data.display_seller_id || `SEL-${String(data.seller_id || '').padStart(6, '0')}`;
                 document.getElementById('view_buyer').textContent = buyerCode;
                 document.getElementById('view_seller').textContent = sellerCode;
 

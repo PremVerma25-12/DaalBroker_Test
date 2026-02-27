@@ -10,7 +10,12 @@ from django.views.decorators.http import require_GET, require_POST
 # Helper function to check if user is superuser
 def is_superuser(user):
     """Helper function to check if user is superuser"""
-    return user.is_authenticated and (user.is_superuser or user.is_staff or user.is_admin)
+    return user.is_authenticated and (
+        user.is_superuser
+        or user.is_staff
+        or user.is_admin
+        or getattr(user, 'role', '') == 'super_admin'
+    )
 
 ALLOWED_ROLES = {choice[0] for choice in DaalUser.ROLE_CHOICES}
 ALLOWED_MODULES = {choice[0] for choice in MODULE_CHOICES}

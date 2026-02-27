@@ -1,3 +1,4 @@
+{% load custom_filters %}
 <style>
 
     /* --- Sidebar Styles --- */
@@ -261,7 +262,7 @@
       <!-- Added data-bs-parent="#sidebar-accordion" here -->
       <div class="collapse" id="mastersMenu" data-bs-parent="#sidebar-accordion">
         <ul class="nav flex-column sidebar-submenu">
-        {% if user.is_superuser %}
+        {% if user.is_superuser or user|user_can:"user_management:read" %}
         <li class="nav-item">
           <a href="{% url 'user_list' %}" class="nav-link">
             <i class="fa-regular fa-calendar"></i> <span class="link-text">User Management</span>
@@ -316,7 +317,14 @@
 
   <div class="collapse" id="product" data-bs-parent="#sidebar-accordion">
     <ul class="nav flex-column sidebar-submenu">
-
+      {% if user.is_superuser or user.role == 'admin' or user.is_staff or user.role == 'seller' or user.is_seller or user|user_can:"product_management:create" %}
+      <li class="nav-item">
+        <a href="{% url 'product_create' %}" class="nav-link">
+          <i class="fa-solid fa-images"></i>
+          <span class="link-text">Create Offer's</span>
+        </a>
+      </li>
+      {% endif %}
       <!-- Product Master -->
       <li class="nav-item">
         <a href="{% url 'product_list' %}" class="nav-link">
@@ -326,7 +334,7 @@
       </li>
 
       <!-- Product Images -->
-      {% if user.is_superuser or user.role == 'admin' or user.is_staff or user.role == 'seller' or user.is_seller %}
+      {% if user.is_superuser or user.role == 'admin' or user.is_staff or user.role == 'seller' or user.is_seller or user|user_can:"product_image_management:read" %}
       <li class="nav-item">
         <a href="{% url 'product_image_list' %}" class="nav-link">
           <i class="fa-solid fa-images"></i>

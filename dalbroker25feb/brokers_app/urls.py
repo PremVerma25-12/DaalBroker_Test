@@ -83,6 +83,7 @@ urlpatterns = [
     path('api/users/<int:user_id>/', views.get_user_data, name='get_user_data'),
     path('api/users/create/', views.user_create_ajax, name='user_create_ajax'),
     path('api/users/<int:user_id>/update/', views.user_update_ajax, name='user_update_ajax'),
+    path('api/users/<int:user_id>/status/', views.user_update_status_ajax, name='user_update_status_ajax'),
     path('api/users/<int:user_id>/delete/', views.user_delete_ajax, name='user_delete_ajax'),
     
     # Permissions Management
